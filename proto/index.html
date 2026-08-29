@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dsh-pet · 准宠物预览</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --bg-2: #181b22;
+    --fg: #e8eaed;
+    --fg-dim: #8b8f98;
+    --accent: #4f9eff;
+    --offline: #4b4f57;
+    --sleeping: #5b6f9c;
+    --working: #4f9eff;
+    --needYou: #ffa940;
+    --panic: #ff4d4f;
+    --celebrating: #52c41a;
+    --border: #2a2e38;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    gap: 16px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--fg-dim);
+    font-size: 13px;
+  }
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--offline);
+    transition: background 0.3s;
+  }
+  .dot.connected { background: var(--celebrating); box-shadow: 0 0 8px var(--celebrating); }
+  .dot.connecting { background: var(--needYou); animation: blink 1s infinite; }
+  .dot.error { background: var(--panic); }
+  @keyframes blink { 50% { opacity: 0.3; } }
+
+  .pet-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .pet {
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background: var(--offline);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 96px;
+    transition: background 0.4s, transform 0.3s;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    position: relative;
+  }
+  .pet-count {
+    position: absolute;
+    top: 8px; right: 8px;
+    min-width: 40px; height: 40px;
+    padding: 0 8px;
+    border-radius: 20px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 18px;
+    font-weight: 700;
+    display: none; /* >1 会话才显示 */
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.45);
+    border: 2px solid var(--bg-2);
+  }
+  .pet-count.show { display: flex; }
+  .pet[data-state="sleeping"] { background: var(--sleeping); animation: breathe 3s ease-in-out infinite; }
+  .pet[data-state="working"] { background: var(--working); animation: workPulse 1.5s ease-in-out infinite; }
+  .pet[data-state="needYou"] { background: var(--needYou); animation: knock 0.6s ease-in-out infinite; }
+  .pet[data-state="panic"] { background: var(--panic); animation: shake 0.4s ease-in-out 3; }
+  .pet[data-state="celebrating"] { background: var(--celebrating); animation: spin 1s ease-out 1; }
+
+  @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+  @keyframes workPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); } }
+  @keyframes knock { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+  @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+  @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+
+  .intensity {
+    display: inline-flex;
+    gap: 4px;
+  }
+  .intensity span {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--border);
+  }
+  .intensity span.on { background: var(--working); }
+
+  .label { font-size: 14px; color: var(--fg-dim); text-align: center; }
+  .label .value { color: var(--fg); font-weight: 500; }
+  .label-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    background: var(--border);
+    color: var(--fg-dim);
+  }
+  .badge.live { background: var(--working); color: white; }
+  .badge.urgent { background: var(--needYou); color: black; }
+  .badge.panic { background: var(--panic); color: white; }
+  .badge.celebrate { background: var(--celebrating); color: black; }
+
+  .details {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .details .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .details .row .key { color: var(--fg-dim); }
+  .details .row .val { color: var(--fg); text-align: right; word-break: break-all; }
+
+  details {
+    width: 100%;
+    max-width: 420px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  details summary { cursor: pointer; color: var(--fg-dim); }
+  pre {
+    margin: 8px 0 0;
+    padding: 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    overflow-x: auto;
+    color: var(--fg-dim);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .log {
+    width: 100%;
+    max-width: 420px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 11px;
+    max-height: 180px;
+    overflow-y: auto;
+    font-family: ui-monospace, Consolas, monospace;
+  }
+  .log .entry { padding: 2px 0; color: var(--fg-dim); }
+  .log .entry.state { color: var(--accent); }
+  .log .entry .time { color: #555; margin-right: 8px; }
+
+  footer {
+    color: var(--fg-dim);
+    font-size: 11px;
+    text-align: center;
+    margin-top: 16px;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <span class="dot" id="dot"></span>
+    <span id="conn">未连接</span>
+    <span id="port"></span>
+  </header>
+
+  <div class="pet-card">
+    <div class="pet" id="pet" data-state="offline"><span id="pet-glyph">💤</span><span class="pet-count" id="pet-count"></span></div>
+    <div class="label" id="state-label">等待连接</div>
+    <div class="label label-row" id="badges"></div>
+  </div>
+
+  <div class="details" id="details">
+    <div class="row"><span class="key">会话标题</span><span class="val" id="d-title">—</span></div>
+    <div class="row"><span class="key">运行会话</span><span class="val" id="d-sessions">—</span></div>
+    <div class="row"><span class="key">状态</span><span class="val" id="d-status">—</span></div>
+    <div class="row"><span class="key">活动</span><span class="val" id="d-activity">—</span></div>
+    <div class="row"><span class="key">强度</span><span class="val" id="d-intensity">—</span></div>
+    <div class="row"><span class="key">子代理</span><span class="val" id="d-subagents">—</span></div>
+    <div class="row"><span class="key">后台任务</span><span class="val" id="d-jobs">—</span></div>
+    <div class="row"><span class="key">工作流</span><span class="val" id="d-workflow">—</span></div>
+  </div>
+
+  <details>
+    <summary>原始 state JSON</summary>
+    <pre id="raw">{}</pre>
+  </details>
+
+  <div class="log" id="log"></div>
+
+  <footer>
+    dsh-pet proto · 连接 DSH 内 cordis 插件的 /dsh-pet/ws · 端口自动发现（50000–65000）
+    或显式指定：<input id="port-input" placeholder="端口" style="background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;width:80px;">
+    <button id="port-btn" style="background:var(--border);color:var(--fg);border:none;border-radius:4px;padding:2px 10px;cursor:pointer">连接</button>
+  </footer>
+
+<script>
+const PET_GLYPH = {
+  offline: '💤', sleeping: '😴',
+  thinking: '🤔', coding: '💻', cmd: '⌨️', search: '🔍',
+  spawning: '🐣', waiting: '⏳',
+  needYou: '🚪', panic: '😱', celebrating: '🎉',
+}
+const ACTIVITY_LABEL = {
+  idle: '闲置', thinking: '思考中…', coding: '写代码',
+  cmd: '跑命令', search: '查资料', spawning: '召唤小弟', waiting: '等你输入',
+}
+
+const $ = (id) => document.getElementById(id)
+const log = (msg, cls = '') => {
+  const el = $('log')
+  const time = new Date().toTimeString().slice(0, 8)
+  const div = document.createElement('div')
+  div.className = 'entry' + (cls ? ' ' + cls : '')
+  div.innerHTML = `<span class="time">${time}</span>${msg}`
+  el.appendChild(div)
+  while (el.children.length > 30) el.removeChild(el.firstChild)
+  el.scrollTop = el.scrollHeight
+}
+
+let lastStateJson = ''
+let ws = null
+let retries = 0
+let connected = false
+
+function deriveState(s) {
+  if (!s) return 'offline'
+  if (s.awaitingApproval?.pending) return 'needYou'
+  if (s.pulse?.kind === 'panic') return 'panic'
+  if (s.pulse?.kind === 'celebrating') return 'celebrating'
+  if (s.session?.status === 'running') return 'working'
+  return 'sleeping'
+}
+
+function deriveActivity(s) {
+  if (!s || s.session?.status !== 'running') return 'idle'
+  return s.activity || 'thinking'
+}
+
+function render(s) {
+  const state = deriveState(s)
+  const activity = deriveActivity(s)
+  $('pet').dataset.state = state
+  $('pet-glyph').textContent = PET_GLYPH[activity] || PET_GLYPH[state] || '🐱'
+
+  // 多会话角标：运行中会话 > 1 时显示 ×N
+  const running = s?.sessions?.running ?? 0
+  const pc = $('pet-count')
+  if (running > 1) { pc.textContent = '×' + running; pc.classList.add('show') }
+  else pc.classList.remove('show')
+  $('state-label').innerHTML = state === 'working'
+    ? `<span class="value">${ACTIVITY_LABEL[activity] || activity}</span>`
+    : `<span class="value">${state}</span>`
+
+  // 徽章
+  const badges = []
+  if (s?.awaitingApproval?.pending) {
+    badges.push(`<span class="badge urgent">🚨 等批准</span>`)
+  }
+  if (s?.pulse?.kind === 'panic') {
+    badges.push(`<span class="badge panic">😱 出错</span>`)
+  }
+  if (s?.pulse?.kind === 'celebrating') {
+    badges.push(`<span class="badge celebrate">🎉 完成</span>`)
+  }
+  if (s?.session?.status === 'running') {
+    badges.push(`<span class="badge live">运行中</span>`)
+  }
+  $('badges').innerHTML = badges.join(' ')
+
+  // 详情
+  $('d-title').textContent = s?.session?.title || '（空）'
+  const sess = s?.sessions
+  const sessList = sess?.list || []
+  $('d-sessions').textContent = sess?.running
+    ? `${sess.running} 个${sessList.length ? '：' + sessList.map((x) => x.title || x.id.slice(0, 12)).join(' · ') : ''}`
+    : '0'
+  $('d-status').textContent = s?.session?.status || '—'
+  $('d-activity').textContent = ACTIVITY_LABEL[activity] || activity
+  const intensity = s?.activityIntensity ?? 0
+  $('d-intensity').innerHTML = `<span class="intensity">${
+    [0,1,2,3].map(i => `<span class="${i < intensity ? 'on' : ''}"></span>`).join('')
+  }</span>`
+  $('d-subagents').textContent = `${s?.subagents?.running ?? 0}`
+  const jobs = s?.jobs || []
+  $('d-jobs').textContent = jobs.length ? `${jobs.length} 个：${jobs.map(j => j.desc || j.id).join(', ')}` : '0'
+  const wf = s?.workflow
+  $('d-workflow').textContent = wf?.running ? `运行中${wf.phase ? ' · ' + wf.phase : ''}` : '空闲'
+
+  $('raw').textContent = JSON.stringify(s, null, 2)
+}
+
+async function tryPort(p, ms = 500) {
+  const ctrl = (typeof AbortController === 'function') ? new AbortController() : null
+  const timer = setTimeout(() => { try { ctrl && ctrl.abort() } catch (e) {} }, ms)
+  try {
+    const r = await fetch(`http://127.0.0.1:${p}/dsh-pet/handshake`, ctrl ? { signal: ctrl.signal } : {})
+    if (!r.ok) { console.log(`[tryPort ${p}] not ok status=${r.status}`); return false }
+    const d = await r.json()
+    if (d && d.name === 'dsh-pet') { console.log(`[tryPort ${p}] HIT`); return true }
+    console.log(`[tryPort ${p}] no dsh-pet marker: ${JSON.stringify(d).slice(0, 60)}`)
+    return false
+  } catch (e) { console.log(`[tryPort ${p}] err: ${e.name}: ${e.message}`); return false }
+  finally { clearTimeout(timer) }
+}
+
+// 分块并发扫描：每块最多 8 个并发，命中即停
+async function scanRange(ranges) {
+  for (const [lo, hi] of ranges) {
+    const ports = []
+    for (let p = lo; p <= hi; p++) ports.push(p)
+    for (let i = 0; i < ports.length; i += 8) {
+      const chunk = ports.slice(i, i + 8)
+      const results = await Promise.all(chunk.map(tryPort))
+      for (let j = 0; j < chunk.length; j++) {
+        if (results[j]) return chunk[j]
+      }
+    }
+  }
+  return null
+}
+
+async function discoverPort() {
+  const url = new URL(location.href)
+  const override = url.searchParams.get('port')
+  if (override) { log(`🔧 URL 指定端口 ${override}`); return parseInt(override, 10) }
+  // 没有 ?port= 时需要用户输入，不再做扫描（跨源 + CORS + Chrome 端口限制导致不可靠）
+  return null
+}
+
+function setConn(state, port) {
+  const dot = $('dot')
+  dot.className = 'dot ' + state
+  $('conn').textContent = state === 'connected' ? '已连接' :
+    state === 'connecting' ? '连接中…' :
+    state === 'error' ? '连接错误' : '未连接'
+  $('port').textContent = port ? `· port ${port}` : ''
+}
+
+async function connect() {
+  setConn('connecting', null)
+  const port = await discoverPort()
+  if (!port) {
+    setConn('error', null)
+    log('❌ URL 没指定 ?port= 也没缓存。请用 ?port=<DSH端口> 打开页面', 'state')
+    log('   端口在 DSH GUI 地址栏，或 `node -e "console.log(process.env.DSH_WEB_URL)"`', 'state')
+    return  // 不重试，等用户重新带 ?port= 打开
+  }
+  setConn('connecting', port)
+  try {
+    ws = new WebSocket(`ws://127.0.0.1:${port}/dsh-pet/ws`)
+    ws.onopen = () => {
+      connected = true
+      retries = 0
+      setConn('connected', port)
+      localStorage.setItem('dsh-pet.port', String(port))
+      log('✅ WS 已连接', 'state')
+    }
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data)
+        if (msg.type === 'state') {
+          const json = JSON.stringify(msg)
+          if (json !== lastStateJson) {
+            lastStateJson = json
+            render(msg)
+            log(`state: ${deriveState(msg)} / activity: ${msg.activity || '—'}${msg.awaitingApproval?.pending ? ' / ⚠️ ' + msg.awaitingApproval.summary : ''}`)
+          }
+        } else if (msg.type === 'ping') {
+          // 不刷屏
+        } else if (msg.type === 'bye') {
+          log('⚠️ 服务端关闭连接', 'state')
+        }
+      } catch (e) { log(`⚠️ parse error: ${e.message}`) }
+    }
+    ws.onerror = () => { log('⚠️ WS 错误') }
+    ws.onclose = () => {
+      connected = false
+      retries++
+      const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(retries, 5)))
+      log(`断开 · ${delay/1000}s 后重试（#${retries}）`)
+      setConn('error', port)
+      setTimeout(connect, delay)
+    }
+  } catch (e) {
+    log(`连接失败: ${e.message}`)
+    setTimeout(connect, 3000)
+  }
+}
+
+render(null)
+connect()
+
+// 手动指定端口
+const portBtn = document.getElementById('port-btn')
+if (portBtn) {
+  portBtn.onclick = () => {
+    const inp = document.getElementById('port-input')
+    const v = parseInt(inp.value, 10)
+    if (!v || v < 1 || v > 65535) { log('⚠️ 无效端口'); return }
+    if (ws) try { ws.close() } catch (e) {}
+    retries = 0
+    log(`🔧 手动指定端口 ${v}`)
+    setConn('connecting', null)
+    const tryOverride = async () => {
+      if (await tryPort(v)) {
+        localStorage.setItem('dsh-pet.port', String(v))
+        await connectWithPort(v)
+      } else {
+        log(`❌ 端口 ${v} 不是 dsh-pet 端点`)
+      }
+    }
+    tryOverride()
+  }
+}
+async function connectWithPort(p) {
+  setConn('connecting', p)
+  try {
+    ws = new WebSocket(`ws://127.0.0.1:${p}/dsh-pet/ws`)
+    ws.onopen = () => { connected = true; retries = 0; setConn('connected', p); localStorage.setItem('dsh-pet.port', String(p)); log('✅ WS 已连接', 'state') }
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data)
+        if (msg.type === 'state') {
+          const json = JSON.stringify(msg)
+          if (json !== lastStateJson) {
+            lastStateJson = json; render(msg)
+            log(`state: ${deriveState(msg)} / activity: ${msg.activity || '—'}${msg.awaitingApproval?.pending ? ' / ⚠️ ' + msg.awaitingApproval.summary : ''}`)
+          }
+        } else if (msg.type === 'ping') {}
+      } catch (e) { log(`⚠️ parse error: ${e.message}`) }
+    }
+    ws.onerror = () => { log('⚠️ WS 错误') }
+    ws.onclose = () => {
+      connected = false; retries++
+      const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(retries, 5)))
+      log(`断开 · ${delay/1000}s 后重试（#${retries}）`)
+      setConn('error', p)
+      setTimeout(connect, delay)
+    }
+  } catch (e) { log(`连接失败: ${e.message}`); setTimeout(connect, 3000) }
+}
+</script>
+</body>
+</html>

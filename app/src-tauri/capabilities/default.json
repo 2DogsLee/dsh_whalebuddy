@@ -1,0 +1,14 @@
+{
+  "identifier": "default",
+  "description": "dsh-pet 宠物窗口权限：拖拽、位置记忆、关闭、待批准时窗口加高",
+  "windows": ["pet"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-destroy",
+    "core:window:allow-set-position",
+    "core:window:allow-outer-position",
+    "core:window:allow-set-size",
+    "core:event:default"
+  ]
+}

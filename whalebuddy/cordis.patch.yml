@@ -1,0 +1,6 @@
+# whalebuddy bundle patch：作为 profile 的一个 bundle 层插入感知层插件。
+# 安装方式见 README：把本包放进 profile 可解析的 node_modules，
+# 并在 profile package.json 的 dsh.profile.bundles 里追加 "whalebuddy"。
+- insert:
+    - id: whalebuddy
+      name: whalebuddy

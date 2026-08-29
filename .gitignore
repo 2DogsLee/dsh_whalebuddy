@@ -1,0 +1,22 @@
+# 安装器与本地工具缓存
+.tools/
+
+# Rust / Tauri 构建产物
+app/src-tauri/target/
+
+# 运行日志（宠物/发现层诊断日志）
+*.log
+pet-discover.log
+
+# Node
+node_modules/
+
+# 系统杂项
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 编辑器
+.vscode/
+.idea/
+*.swp

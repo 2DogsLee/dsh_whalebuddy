@@ -1,0 +1,15 @@
+{
+  "name": "whalebuddy",
+  "description": "whalebuddy — DeepSeek Harness 桌面宠物感知层（状态广播 + autostart/skin 设置）",
+  "version": "0.1.0",
+  "entry": {
+    "name": "whalebuddy",
+    "inject": [
+      "webServer",
+      "timer"
+    ]
+  },
+  "bundle": {
+    "patch": "./cordis.patch.yml"
+  }
+}

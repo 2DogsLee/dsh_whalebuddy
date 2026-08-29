@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>WS minimal test</title>
+<style>
+body { font-family: monospace; padding: 20px; background: #111; color: #eee; }
+#log { white-space: pre-wrap; max-width: 800px; }
+</style>
+</head>
+<body>
+<h2>WS Minimal Test</h2>
+<div id="log"></div>
+<script>
+const log = (m) => {
+  document.getElementById('log').textContent += new Date().toISOString().slice(11, 19) + ' ' + m + '\n'
+}
+const url = new URL(location.href)
+const port = url.searchParams.get('port') || '64171'
+log('Page loaded. Will connect to ws://127.0.0.1:' + port + '/dsh-pet/ws')
+try {
+  const ws = new WebSocket('ws://127.0.0.1:' + port + '/dsh-pet/ws')
+  ws.onopen = () => log('OPEN readyState=' + ws.readyState)
+  ws.onerror = (e) => log('ERROR event (no detail in spec). readyState=' + ws.readyState)
+  ws.onclose = (e) => log('CLOSE code=' + e.code + ' reason=' + e.reason + ' wasClean=' + e.wasClean + ' readyState=' + ws.readyState)
+  ws.onmessage = (e) => log('MSG: ' + e.data.slice(0, 100))
+  log('WebSocket created. readyState=' + ws.readyState)
+  setTimeout(() => log('2s check: readyState=' + ws.readyState), 2000)
+  setTimeout(() => log('5s check: readyState=' + ws.readyState), 5000)
+} catch (e) {
+  log('THROW: ' + e.message)
+}
+</script>
+</body>
+</html>

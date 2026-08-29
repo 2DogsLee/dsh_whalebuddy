@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>dsh-pet</title>
+<style>
+  /* DSH 黑色鲸鱼（PNG，透明背景，240×320，aspect 0.75）共用给本体和小弟 */
+  :root { --dsh-whale: url("data:image/png;base64,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"); }
+
+  /* 整窗透明：窗口本体由 tauri.conf.json transparent:true 打通 */
+  /* 皮肤扩展点：html[data-skin='<skin-id>'] 覆盖 --dsh-whale 等变量即可换肤。
+     whalebuddy 设置菜单的 skin 字段推送 data-skin（applyConfig）。
+     默认皮肤 dsh-black-whale 即 :root 当前鲸鱼；新增皮肤在此加一组覆盖。 */
+  html[data-skin='dsh-black-whale'] { /* 默认黑鲸皮肤，变量即 :root，无需覆盖 */ }
+  * { box-sizing: border-box; user-select: none; }
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+    font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  }
+  body.expanded { overflow: visible; }
+
+  .card {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    position: relative;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.01); /* 几乎透明但强制 WebView 接收鼠标（透明穿透绕过） */
+    pointer-events: auto;
+  }
+
+  /* ============ ①+②+③+④ 舷窗（四层渲染） ============ */
+  .pet {
+    position: relative;
+    width: 150px;
+    height: 150px;
+    cursor: grab;
+  }
+  .pet:active { cursor: grabbing; }
+
+  /* ④ 视口裁剪 + ② 场景层 */
+  .viewport {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.5);
+  }
+  .scene {
+    position: absolute;
+    inset: 0;
+    background-color: #0a3d5e;
+    transition: background-color 1s ease;
+    overflow: hidden;
+  }
+  /* 顶部光晕（可过渡，渐变底色不可插值所以不用渐变） */
+  .scene::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% -12%, rgba(140, 210, 255, 0.22), transparent 58%);
+    opacity: 0.35;
+    transition: opacity 1s;
+    pointer-events: none;
+  }
+  /* 恒定暗角（盖在道具之上，加深"透过玻璃"感） */
+  .scene::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 45%, transparent 34%, rgba(2, 8, 14, 0.5) 74%, rgba(1, 4, 8, 0.85) 100%);
+    pointer-events: none;
+  }
+
+  /* —— 场景底色：activity 规则在前，state 规则在后（后者覆盖前者） —— */
+  .scene { background-color: #0a3d5e; }
+  [data-activity="coding"]   .scene { background-color: #0f4e75; }
+  [data-activity="cmd"]      .scene { background-color: #0b3a58; }
+  [data-activity="search"]   .scene { background-color: #0e4c6e; }
+  [data-activity="spawning"] .scene { background-color: #0d4a70; }
+  [data-state="offline"]     .scene { background-color: #05131d; }
+  [data-state="sleeping"]    .scene { background-color: #07232f; }
+  [data-state="needYou"]     .scene { background-color: #0b4a68; }
+  [data-state="panic"]       .scene { background-color: #2b1318; }
+  [data-state="celebrating"] .scene { background-color: #0c3d57; }
+
+  /* —— 顶部光晕强度 —— */
+  [data-state="offline"]     .scene::before { opacity: 0.08; }
+  [data-state="sleeping"]    .scene::before { opacity: 0.2; }
+  [data-state="needYou"]     .scene::before { opacity: 0.55; }
+  [data-state="panic"]       .scene::before {
+    background: radial-gradient(ellipse at 50% -12%, rgba(255, 90, 70, 0.20), transparent 58%);
+    opacity: 0.3;
+  }
+  [data-state="celebrating"] .scene::before { opacity: 0.5; }
+  [data-activity="coding"]   .scene::before { opacity: 0.5; }
+  [data-activity="cmd"]      .scene::before { opacity: 0.38; }
+  [data-activity="search"]   .scene::before { opacity: 0.45; }
+  [data-activity="spawning"] .scene::before { opacity: 0.42; }
+
+  /* —— 场景道具：光线 / 海底 / 珊瑚 / 终端 / 声呐 / 小弟 / 浊流 / 极光 —— */
+  .rays {
+    position: absolute;
+    left: -32%; top: -42%;
+    width: 164%; height: 150%;
+    background: conic-gradient(from 172deg at 50% 6%,
+      transparent 0deg, rgba(150, 215, 255, 0.11) 7deg, transparent 15deg,
+      transparent 26deg, rgba(150, 215, 255, 0.08) 32deg, transparent 40deg,
+      transparent 55deg, rgba(150, 215, 255, 0.07) 61deg, transparent 70deg,
+      transparent 86deg, rgba(150, 215, 255, 0.06) 92deg, transparent 100deg);
+    animation: raysSway 9s ease-in-out infinite alternate;
+    opacity: 0.8;
+    transition: opacity 1s;
+  }
+  @keyframes raysSway { from { transform: rotate(-3deg); } to { transform: rotate(3deg); } }
+  [data-state="offline"]  .rays { opacity: 0; }
+  [data-state="sleeping"] .rays { opacity: 0.45; }
+  [data-state="panic"]    .rays { opacity: 0.15; }
+
+  .seabed {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    width: 100%; height: 50px;
+    opacity: 0.85;
+    transition: opacity 1s;
+  }
+  [data-state="offline"]     .seabed { opacity: 0.12; }
+  [data-state="needYou"]     .seabed { opacity: 0.3; }
+  [data-state="panic"]       .seabed { opacity: 0.35; }
+  [data-state="celebrating"] .seabed { opacity: 0.4; }
+
+  .coral {
+    position: absolute;
+    left: 6px; bottom: 26px;
+    width: 74px; height: auto;
+    display: none;
+    filter: drop-shadow(0 0 4px rgba(255, 120, 160, 0.35));
+  }
+  [data-activity="coding"] .coral,
+  [data-activity="cmd"]    .coral { display: block; }
+
+  .terminal {
+    position: absolute;
+    left: 20px; top: 35px;
+    width: 58px; height: 40px;
+    padding: 3px 0 0 0;
+    border-radius: 4px;
+    background: rgba(3, 10, 16, 0.88);
+    border: 1px solid rgba(92, 230, 168, 0.4);
+    box-shadow: 0 0 10px rgba(92, 230, 168, 0.28);
+    display: none;
+    overflow: hidden;
+  }
+  /* coding：屏幕内代码行 + 光标闪烁；cmd：屏幕内 running 文字闪烁 + 屏幕晃动 */
+  .terminal .code-lines { display: block; }
+  .terminal .cmd-text { display: none; }
+  .terminal i {
+    display: block; height: 4px;
+    margin: 3px 6px; border-radius: 2px;
+    background: linear-gradient(90deg, #5ce6a8, rgba(92, 230, 168, 0.12));
+  }
+  .terminal i:nth-child(1) { width: 74%; }
+  .terminal i:nth-child(2) { width: 52%; }
+  .terminal i:nth-child(3) { width: 88%; }
+  .terminal b {
+    display: block; width: 3px; height: 8px;
+    margin: 1px 6px;
+    background: #5ce6a8;
+    animation: blink .9s steps(1) infinite;
+  }
+  .terminal .cmd-text {
+    display: none;
+    margin: 6px 0 0 6px;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: #5ce6a8;
+    text-shadow: 0 0 6px rgba(92, 230, 168, 0.7);
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  [data-activity="coding"] .terminal { display: block; }
+  [data-activity="coding"] .terminal .code-lines { display: block; }
+  [data-activity="coding"] .terminal .cmd-text { display: none; }
+  [data-activity="cmd"] .terminal { display: block; animation: terminalShake .55s ease-in-out infinite; }
+  [data-activity="cmd"] .terminal .code-lines { display: none; }
+  [data-activity="cmd"] .terminal .cmd-text { display: block; animation: cmdFlash 1s steps(1) infinite; }
+  @keyframes terminalShake {
+    0%, 100% { transform: translate(0, 0); }
+    25%      { transform: translate(2px, -1px); }
+    75%      { transform: translate(-2px, 1px); }
+  }
+  @keyframes cmdFlash { 50% { opacity: 0; } }
+
+  /* 声呐：Canvas 绘制（绕开 CSS 动画/层叠问题，必定可见） */
+  .sonar-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    z-index: 50;
+    pointer-events: none;
+  }
+
+  .babies { position: absolute; inset: 0; display: none; }
+  .baby {
+    position: absolute;
+    width: 26px;
+    height: 35px;
+    background: var(--dsh-whale) center/contain no-repeat;
+    opacity: 0.85;
+    filter: drop-shadow(0 0 4px rgba(190, 220, 255, 0.3));
+  }
+  .baby.b1 { left: 55%; top: 28%; animation: babySwim 4.5s ease-in-out infinite; }
+  .baby.b2 { left: 57%; top: 68%; animation: babySwim 4.5s ease-in-out infinite 1.4s; }
+  @keyframes babySwim {
+    0%, 100% { transform: translate(0, 0) rotate(-4deg); }
+    50%      { transform: translate(14px, -10px) rotate(5deg); }
+  }
+  [data-activity="spawning"] .babies { display: block; }
+
+  .murk { position: absolute; inset: 0; display: none; overflow: hidden; }
+  .murk i {
+    position: absolute; left: -25%;
+    width: 150%; height: 34px;
+    border-radius: 50%;
+    background: rgba(18, 36, 52, 0.45);
+    filter: blur(7px);
+  }
+  [data-state="panic"] .murk i { background: rgba(74, 26, 20, 0.5); }
+  .murk i:nth-child(1) { top: 8%;  animation: murkDrift 4.6s ease-in-out infinite; }
+  .murk i:nth-child(2) { top: 42%; animation: murkDrift 4.6s ease-in-out infinite 1.5s; }
+  .murk i:nth-child(3) { top: 72%; animation: murkDrift 4.6s ease-in-out infinite 3s; }
+  @keyframes murkDrift { 0%, 100% { transform: translateX(-6%); } 50% { transform: translateX(6%); } }
+  [data-state="panic"] .murk { display: block; }
+
+  .aurora { position: absolute; inset: 0; display: none; overflow: hidden; }
+  .aurora i {
+    position: absolute;
+    left: 8%; right: 8%;
+    height: 22px;
+    border-radius: 50%;
+    filter: blur(10px);
+    opacity: 0.5;
+    mix-blend-mode: screen;
+  }
+  .aurora i:nth-child(1) {
+    top: 16%;
+    background: linear-gradient(90deg, transparent, #2ee6c8, #4d6bfe, transparent);
+    animation: auroraSway 4.5s ease-in-out infinite alternate;
+  }
+  .aurora i:nth-child(2) {
+    top: 30%;
+    background: linear-gradient(90deg, transparent, #7b5cff, #2ee6c8, transparent);
+    animation: auroraSway 5.5s ease-in-out infinite alternate-reverse;
+  }
+  @keyframes auroraSway {
+    from { transform: translateX(-4%) rotate(-2deg); }
+    to   { transform: translateX(4%) rotate(2deg); }
+  }
+  [data-state="celebrating"] .aurora { display: block; }
+
+  /* —— 气泡（共享粒子池：JS 只调 --spd / --op） —— */
+  .bubbles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .bubbles i {
+    position: absolute; bottom: -12px; left: var(--x);
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    border: 1px solid rgba(190, 225, 255, 0.55);
+    background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.5), rgba(160, 210, 255, 0.08));
+    opacity: 0;
+    animation: rise var(--spd, 3s) linear infinite;
+    animation-delay: var(--d, 0s);
+  }
+  .bubbles i:nth-child(3n)   { width: 4px; height: 4px; }
+  .bubbles i:nth-child(3n+1) { width: 7px; height: 7px; }
+  @keyframes rise {
+    0%   { transform: translate(0, 0); opacity: 0; }
+    12%  { opacity: var(--op, 0.5); }
+    85%  { opacity: var(--op, 0.5); }
+    100% { transform: translate(var(--dx, 4px), -152px); opacity: 0; }
+  }
+  /* panic：气泡 → 向上的乱流（湍急水流条，上升时左右扭曲） */
+  [data-state="panic"] .bubbles i {
+    width: 3px; height: 16px;
+    border-radius: 2px;
+    border: none;
+    background: linear-gradient(rgba(190, 220, 255, 0.55), rgba(160, 210, 255, 0.05));
+    animation: flowRise var(--spd, 0.9s) linear infinite;
+  }
+  [data-state="panic"] .bubbles i:nth-child(3n)   { width: 2px; height: 12px; }
+  [data-state="panic"] .bubbles i:nth-child(3n+1) { width: 4px; height: 20px; }
+  @keyframes flowRise {
+    0%   { opacity: 0; transform: translate(0, 0) rotate(-14deg); }
+    15%  { opacity: 0.6; }
+    50%  { opacity: 0.6; transform: translate(14px, -66px) rotate(12deg); }
+    100% { opacity: 0; transform: translate(-14px, -150px) rotate(-10deg); }
+  }
+
+  /* —— ③ 鲸鱼（官方 logo path，<use> 复用；whale-pos 定位，whale 摆姿） —— */
+  .whale-pos {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translate(0, 0);
+    transition: transform 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
+  }
+  .whale {
+    width: var(--whale-w, 84px);
+    height: calc(var(--whale-w, 84px) * 4 / 3);
+    background: var(--dsh-whale) center/contain no-repeat;
+    filter: drop-shadow(0 0 7px rgba(190, 220, 255, 0.35)) drop-shadow(0 0 14px rgba(190, 220, 255, 0.18));
+    animation: sway 5.5s ease-in-out infinite;
+  }
+
+  /* thinking：鲸鱼头顶的加载菊花（放 whale-pos 里，跟鲸鱼游动同步） */
+  .spinner {
+    position: absolute;
+    left: 56%; top: 24%;
+    width: 20px; height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 3px solid rgba(160, 220, 255, 0.25);
+    border-top-color: rgba(215, 238, 255, 0.95);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+    display: none;
+    filter: drop-shadow(0 0 5px rgba(130, 205, 255, 0.6));
+  }
+  [data-activity="thinking"] .spinner { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes sway { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+
+  /* activity 前置 */
+  [data-activity="coding"]   .whale-pos { transform: translate(24px, 16px) rotate(-6deg); }
+  [data-activity="cmd"]      .whale-pos { transform: translate(24px, 18px) rotate(-5deg); }
+  [data-activity="search"]   .whale-pos { transform: translate(0, 8px); }
+  [data-activity="spawning"] .whale-pos { transform: translate(-18px, 16px) rotate(-4deg); }
+  [data-activity="thinking"] .whale-pos { animation: whaleSwim 6s ease-in-out infinite; }
+  /* state 后置（覆盖 activity） */
+  [data-state="offline"]     .whale-pos { transform: translate(0, 4px); }
+  [data-state="offline"]     .whale {
+    filter: opacity(0.55) drop-shadow(0 0 4px rgba(190, 220, 255, 0.15));
+    opacity: 0.55;
+  }
+  [data-state="sleeping"]    .whale-pos { transform: translate(0, 20px); }
+  [data-state="sleeping"]    .whale { animation: sway 8s ease-in-out infinite; opacity: 0.92; }
+  [data-state="needYou"]     .whale-pos { transform: translate(0, 6px) scale(1.18); }  // 贴近窗口：居中略靠下 + 放大
+  [data-state="needYou"]     .whale { animation: none; filter: drop-shadow(0 0 10px rgba(190, 220, 255, 0.5)) drop-shadow(0 0 20px rgba(190, 220, 255, 0.25)); }
+  [data-state="panic"]       .whale-pos { animation: dart .6s linear infinite; }
+  [data-state="panic"]       .whale { animation: none; }
+  [data-state="celebrating"] .whale-pos { animation: breach 1.5s ease-in-out infinite; }
+  [data-state="celebrating"] .whale { animation: none; }
+  @keyframes dart {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    25%      { transform: translate(-9px, 5px) rotate(-5deg); }
+    50%      { transform: translate(7px, -7px) rotate(4deg); }
+    75%      { transform: translate(-5px, -9px) rotate(-3deg); }
+  }
+  /* thinking：鲸鱼左右游动 */
+  @keyframes whaleSwim {
+    0%, 100% { transform: translateX(-16px); }
+    50%      { transform: translateX(16px); }
+  }
+  @keyframes breach {
+    0%, 100% { transform: translate(0, 14px) rotate(0deg); }
+    32%      { transform: translate(0, -26px) rotate(-9deg) scale(1.04); }
+    58%      { transform: translate(0, -14px) rotate(5deg); }
+    82%      { transform: translate(0, 8px) rotate(-3deg); }
+  }
+
+  /* —— ④ 前景玻璃层：高光 / 焦散 / 结雾 / 敲击震环 —— */
+  .glass { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; pointer-events: none; }
+  .glint {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.16), transparent 42%),
+      radial-gradient(circle at 74% 78%, rgba(255, 255, 255, 0.05), transparent 40%);
+    box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.55), inset 0 2px 8px rgba(255, 255, 255, 0.06);
+  }
+  .caustics {
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle at 22% 32%, rgba(160, 220, 255, 0.16), transparent 16%),
+      radial-gradient(circle at 74% 62%, rgba(160, 220, 255, 0.12), transparent 20%),
+      radial-gradient(circle at 48% 18%, rgba(160, 220, 255, 0.1), transparent 12%);
+    background-size: 64px 64px, 84px 84px, 56px 56px;
+    animation: causticPan 16s linear infinite;
+    opacity: 0.16;
+    transition: opacity 1s;
+  }
+  @keyframes causticPan {
+    from { background-position: 0 0, 0 0, 0 0; }
+    to   { background-position: 64px 40px, -42px 60px, 30px -30px; }
+  }
+  [data-state="sleeping"] .caustics,
+  [data-state="offline"]  .caustics { opacity: 0.05; }
+  [data-state="needYou"]  .caustics { opacity: 0.3; }
+
+  .fog {
+    position: absolute; inset: 0;
+    opacity: 0;
+    transition: opacity 0.4s;
+    background:
+      radial-gradient(circle at 32% 38%, rgba(220, 240, 255, 0.18), transparent 42%),
+      radial-gradient(circle at 68% 60%, rgba(220, 240, 255, 0.14), transparent 38%),
+      radial-gradient(circle at 55% 25%, rgba(220, 240, 255, 0.1), transparent 30%);
+    filter: blur(2px);
+  }
+  .pet:hover .fog { opacity: 0.6; }
+
+  .knock {
+    position: absolute; left: 50%; top: 50%;
+    width: 56px; height: 56px;
+    margin: -28px 0 0 -28px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.55);
+    opacity: 0;
+  }
+  [data-state="needYou"] .knock { animation: knockRipple 0.6s ease-out infinite; }
+  @keyframes knockRipple {
+    0%   { transform: scale(0.35); opacity: 0.85; }
+    100% { transform: scale(1.9); opacity: 0; }
+  }
+  [data-state="needYou"] .viewport { animation: portholeKnock 0.5s ease-in-out infinite; }
+  @keyframes portholeKnock {
+    0%, 100% { transform: translate(0, 0); }
+    25%      { transform: translate(-2px, -1px); }
+    75%      { transform: translate(2px, 1px); }
+  }
+
+  /* —— ① 外框层（主题化：潜艇黄铜舷窗） —— */
+  .frame {
+    position: absolute;
+    inset: -7px;
+    width: 164px; height: 164px;
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  /* 多会话角标（浮在舷窗内的 HUD 芯片） */
+  .count {
+    position: absolute;
+    right: 8px; bottom: 8px;
+    min-width: 26px; height: 20px;
+    padding: 0 8px;
+    border-radius: 10px;
+    background: rgba(8, 24, 40, 0.72);
+    border: 1px solid rgba(140, 200, 255, 0.35);
+    color: #bfe3ff;
+    font-size: 12px;
+    font-weight: 600;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 4;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  }
+  .count.show { display: flex; }
+
+  /* ============ 深潜器控制台：标签 / 批准 / 详情 ============ */
+  .label {
+    font-size: 13px;
+    color: #d7e6f7;
+    background: rgba(6, 14, 24, 0.78);
+    padding: 3px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(120, 180, 255, 0.18);
+    max-width: 148px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  }
+  .label.offline { color: #7c8ba0; }
+
+  .intensity { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+  .intensity i { width: 5px; height: 5px; border-radius: 50%; background: #27415c; }
+  .intensity i.on { background: #4f9eff; }
+
+  .actions {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+  }
+  .actions.show { display: flex; }
+  .actions .ask-text {
+    font-size: 11px;
+    color: #ffa940;
+    max-width: 158px;
+    white-space: normal;
+    word-break: break-all;
+    text-align: center;
+  }
+  .actions .btn-row { display: flex; gap: 10px; width: 100%; justify-content: center; }
+  .actions button {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 22px;
+    min-width: 78px;
+    white-space: nowrap;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  .actions button:disabled { opacity: 0.45; cursor: default; }
+  .actions .allow { background: #52c41a; color: #06210a; }
+  .actions .allow:hover:not(:disabled) { background: #5fd424; }
+  .actions .deny { background: rgba(255, 77, 79, 0.9); color: #fff; }
+  .actions .deny:hover:not(:disabled) { background: #ff4d4f; }
+
+  .close {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 77, 79, 0.85);
+    color: #fff;
+    font-size: 13px;
+    line-height: 22px;
+    text-align: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 5;
+  }
+  .card:hover .close { opacity: 1; }
+  .close:hover { background: #ff4d4f; }
+
+  .fatal {
+    color: #ff4d4f;
+    font-size: 12px;
+    text-align: center;
+    padding: 20px;
+  }
+
+  /* ============ sleeping：鲸鱼头顶缓缓飘出的 Zzz（向右上、放大、淡化） ============ */
+  .zzz {
+    position: absolute;
+    left: 52%;
+    top: 30%;
+    width: 0; height: 0;
+    display: none;
+    pointer-events: none;
+  }
+  .zzz span {
+    position: absolute;
+    left: 0; top: 0;
+    font-weight: 700;
+    color: rgba(216, 236, 255, 0.92);
+    text-shadow: 0 0 6px rgba(120, 180, 255, 0.55);
+    opacity: 0;
+    animation: zzz 3s ease-out infinite;
+  }
+  .zzz span:nth-child(1) { font-size: 16px; animation-delay: 0s; }
+  .zzz span:nth-child(2) { font-size: 12px; animation-delay: 1s; }
+  .zzz span:nth-child(3) { font-size: 9px;  animation-delay: 2s; }
+  [data-state="sleeping"] .zzz { display: block; }
+  @keyframes zzz {
+    0%   { opacity: 0; transform: translate(0, 0) scale(0.6); }
+    25%  { opacity: 0.92; }
+    100% { opacity: 0; transform: translate(22px, -34px) scale(1.7); }
+  }
+
+  /* ============ 调试模式：右键弹出的状态切换菜单 ============ */
+  .debug-menu {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    background: rgba(4, 10, 18, 0.96);
+    border: 1px solid rgba(120, 180, 255, 0.3);
+    border-radius: 10px;
+    padding: 6px;
+    display: none;
+    overflow-y: auto;
+    user-select: none;
+  }
+  .debug-menu.open { display: block; }
+  .debug-menu .dm-title {
+    font-size: 11px;
+    color: #7c8ba0;
+    text-align: center;
+    padding: 2px 0 4px;
+    border-bottom: 1px solid rgba(120, 180, 255, 0.15);
+    margin-bottom: 4px;
+  }
+  .debug-menu .dm-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 4px 8px;
+    margin: 1px 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #d7e6f7;
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .debug-menu .dm-item:hover { background: rgba(120, 180, 255, 0.15); }
+  .debug-menu .dm-item.active { background: rgba(79, 158, 255, 0.25); color: #fff; }
+  .debug-menu .dm-item .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .debug-menu .dm-item.dm-live .dot { background: #52c41a; }
+  .debug-menu .dm-item.dm-off .dot { background: #4b4f57; }
+  .debug-menu .dm-item.dm-work .dot { background: #4f9eff; }
+  .debug-menu .dm-item.dm-alert .dot { background: #ffa940; }
+  .debug-menu .dm-item.dm-panic .dot { background: #ff4d4f; }
+  .debug-menu .dm-item.dm-joy .dot { background: #52c41a; }
+  .debug-menu .dm-item.dm-action .dot { background: #2b6cff; }
+  .debug-menu .dm-sep { height: 1px; background: rgba(255,255,255,0.08); margin: 4px 6px; }
+  .debug-menu .dm-item.dm-action { color: #8ab4ff; }
+  .debug-menu .dm-item.dm-action[disabled] { opacity: 0.4; cursor: not-allowed; }
+</style>
+</head>
+<body>
+  <!-- DSH 黑色鲸鱼单例：240×320 PNG，<use> 复用于本体与小弟 -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+    </defs>
+  </svg>
+
+  <div class="card" id="card">
+    <button class="close" id="close" title="退出">×</button>
+
+    <div class="pet" id="pet" data-state="offline" data-activity="idle" data-intensity="0">
+      <div class="viewport">
+        <div class="scene" id="scene">
+          <div class="rays"></div>
+          <svg class="seabed" viewBox="0 0 150 62" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M0 34 C 20 24 34 30 52 28 C 72 26 88 34 104 30 C 122 26 138 32 150 28 L 150 62 L 0 62 Z" fill="#082036"/>
+            <path d="M0 46 C 22 40 44 46 66 44 C 90 42 112 48 150 44 L 150 62 L 0 62 Z" fill="#05182a"/>
+            <path d="M28 34 C 30 26 26 20 30 14" stroke="#0e4a74" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M96 32 C 94 24 98 18 95 11" stroke="#0e4a74" stroke-width="2" fill="none" stroke-linecap="round"/>
+            <path d="M120 34 C 122 28 118 22 121 16" stroke="#0c3f63" stroke-width="2" fill="none" stroke-linecap="round"/>
+          </svg>
+          <svg class="coral" viewBox="0 0 92 54" aria-hidden="true">
+            <path d="M16 54 C 14 46 20 42 16 34" stroke="#e0679b" stroke-width="4" fill="none" stroke-linecap="round"/>
+            <path d="M16 42 C 22 40 26 36 24 30" stroke="#ef7fae" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M16 34 C 11 30 8 26 10 20" stroke="#d4558e" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M44 54 C 42 46 46 42 46 36" stroke="#ff9d4d" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+            <path d="M46 44 C 52 42 56 38 54 32" stroke="#ffb066" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M68 54 C 66 48 70 44 68 38" stroke="#e0679b" stroke-width="3" fill="none" stroke-linecap="round"/>
+          </svg>
+          <div class="terminal" aria-hidden="true">
+            <div class="code-lines"><i></i><i></i><i></i><b></b></div>
+            <div class="cmd-text">running</div>
+          </div>
+          <div class="babies" aria-hidden="true">
+            <div class="baby b1" aria-hidden="true"></div>
+            <div class="baby b2" aria-hidden="true"></div>
+          </div>
+          <div class="murk" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div class="aurora" aria-hidden="true"><i></i><i></i></div>
+          <div class="bubbles" id="bubbles">
+            <i style="--x:12%;--d:-.3s;--dx:6px"></i>
+            <i style="--x:24%;--d:-2.1s;--dx:-5px"></i>
+            <i style="--x:37%;--d:-1.2s;--dx:4px"></i>
+            <i style="--x:48%;--d:-3.4s;--dx:-6px"></i>
+            <i style="--x:58%;--d:-.8s;--dx:5px"></i>
+            <i style="--x:68%;--d:-2.8s;--dx:-4px"></i>
+            <i style="--x:77%;--d:-1.6s;--dx:6px"></i>
+            <i style="--x:85%;--d:-4.2s;--dx:-5px"></i>
+            <i style="--x:30%;--d:-5.1s;--dx:3px"></i>
+            <i style="--x:62%;--d:-6.2s;--dx:-3px"></i>
+          </div>
+          <div class="zzz" id="zzz" aria-hidden="true"><span>Z</span><span>Z</span><span>z</span></div>
+        </div>
+
+        <div class="whale-pos">
+          <div class="whale" aria-hidden="true"></div>
+          <div class="spinner" aria-hidden="true"></div>
+        </div>
+
+        <div class="glass">
+          <div class="glint"></div>
+          <div class="caustics"></div>
+          <div class="fog"></div>
+          <span class="knock"></span>
+        </div>
+
+        <canvas class="sonar-canvas" id="sonar-canvas" aria-hidden="true"></canvas>
+      </div>
+
+      <svg class="frame" viewBox="0 0 164 164" aria-hidden="true">
+        <defs>
+          <linearGradient id="brass" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#c9a45c"/><stop offset=".45" stop-color="#8a6a3a"/>
+            <stop offset=".55" stop-color="#6e542e"/><stop offset="1" stop-color="#a8844a"/>
+          </linearGradient>
+          <radialGradient id="rivet" cx=".35" cy=".35" r=".8">
+            <stop offset="0" stop-color="#e0c48a"/><stop offset="1" stop-color="#4a3a1c"/>
+          </radialGradient>
+        </defs>
+        <!-- 外沿暗边 + 铜环（stroke 圆环，跨度 68–80） + 内缘 -->
+        <circle cx="82" cy="82" r="80" fill="none" stroke="#4a3a1c" stroke-width="1.5"/>
+        <circle cx="82" cy="82" r="74" fill="none" stroke="url(#brass)" stroke-width="12"/>
+        <circle cx="82" cy="82" r="68" fill="none" stroke="#3a2c14" stroke-width="2.5"/>
+        <circle cx="82" cy="82" r="67" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="5"/>
+        <g fill="url(#rivet)" stroke="#3a2c14" stroke-width=".8">
+          <circle cx="156" cy="82" r="3.2"/>
+          <circle cx="134.33" cy="134.33" r="3.2"/>
+          <circle cx="82" cy="156" r="3.2"/>
+          <circle cx="29.67" cy="134.33" r="3.2"/>
+          <circle cx="8" cy="82" r="3.2"/>
+          <circle cx="29.67" cy="29.67" r="3.2"/>
+          <circle cx="82" cy="8" r="3.2"/>
+          <circle cx="134.33" cy="29.67" r="3.2"/>
+        </g>
+      </svg>
+
+      <span class="count" id="count"></span>
+    </div>
+
+    <div class="label offline" id="label">找 DSH 中…</div>
+
+    <div class="actions" id="actions">
+      <div class="ask-text" id="ask-text"></div>
+      <div class="btn-row">
+        <button class="allow" id="btn-allow">✓ 允许</button>
+        <button class="deny" id="btn-deny">✗ 拒绝</button>
+      </div>
+    </div>
+
+    <!-- 调试菜单：右键宠物弹出，切换状态/活动看动效 -->
+    <div class="debug-menu" id="debug-menu">
+      <div class="dm-title">调试 · 状态切换（右键再点此菜单外关闭）</div>
+      <button class="dm-item dm-action" data-action="open-config"><span class="dot"></span>🐋 whalebuddy 设置…</button>
+      <div class="dm-sep"></div>
+      <button class="dm-item dm-live" data-debug="live"><span class="dot"></span>真实模式</button>
+      <button class="dm-item dm-off" data-debug="offline"><span class="dot"></span>offline 断连</button>
+      <button class="dm-item dm-off" data-debug="sleeping"><span class="dot"></span>sleeping 睡觉</button>
+      <button class="dm-item dm-alert" data-debug="needYou"><span class="dot"></span>needYou 等待批准</button>
+      <button class="dm-item dm-panic" data-debug="panic"><span class="dot"></span>panic 出错</button>
+      <button class="dm-item dm-joy" data-debug="celebrating"><span class="dot"></span>celebrating 庆祝</button>
+      <button class="dm-item dm-work" data-debug="working-thinking"><span class="dot"></span>working·思考</button>
+      <button class="dm-item dm-work" data-debug="working-coding"><span class="dot"></span>working·coding 写码</button>
+      <button class="dm-item dm-work" data-debug="working-cmd"><span class="dot"></span>working·cmd 命令</button>
+      <button class="dm-item dm-work" data-debug="working-search"><span class="dot"></span>working·search 搜索</button>
+      <button class="dm-item dm-work" data-debug="working-spawning"><span class="dot"></span>working·spawning 小弟</button>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const T = window.__TAURI__
+  if (!T) {
+    document.getElementById('label').textContent = '⚠️ 请用 cargo run 启动'
+    document.getElementById('label').className = 'label offline'
+    return
+  }
+  const invoke = T.core.invoke
+  const win = T.window.getCurrentWindow()
+
+  // 窗口高度：待批准时加高以在舷窗下方显示审批区；只 setSize（顶不动），不改位置
+  const HEIGHT_BASE = 210
+  const HEIGHT_APPROVE = 330
+  function applyHeight(h) {
+    win.setSize(new T.window.LogicalSize(178, h)).catch(() => {})
+  }
+
+  const ACTIVITY_LABEL = {
+    idle: '闲置', thinking: '思考中…', coding: '写代码',
+    cmd: '跑命令', search: '查资料', spawning: '召唤小弟', waiting: '等你输入',
+  }
+
+  const $ = (id) => document.getElementById(id)
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+  let state = null
+  let online = false
+  let curPort = null
+  let ws = null             // 当前 WebSocket（answerApproval 也要用，必须在 IIFE 顶层）
+  let hostVersion = null    // 握手响应里的 hostVersion（v1.1 起提供；null = 旧版）
+  let pendingAsk = null    // { askId, toolName, reason } — 服务端 approval/asked
+  let askAnswered = false  // 已点过按钮，等服务端 settled
+  let discoverErr = null   // discover_port 失败时的错误文本（显示在标签上，便于无控制台诊断）
+  let debugMode = null     // 调试模式锁定：{ state, activity, intensity } 或 null（真实模式）
+  let petConfig = null     // whalebuddy 配置（来自 state/config 消息）：{ autostart, skin }
+  let lastAutostart = null // 上次应用过的 autostart（null=首次，首次也要应用一次做幂等同步）
+
+  // whalebuddy 配置应用：皮肤换 CSS 变量（data-skin 属性）、autostart 调 Rust 写/删 Run 键。
+  // 值变化时动作；首次收到 config（连接握手/宠物重启）也应用一次——幂等写保证
+  // 注册表与 settings 一致（settings=false 时清残留键；settings=true 时确保存在）。
+  function applyConfig(cfg) {
+    if (!cfg || typeof cfg !== 'object') return
+    const skin = typeof cfg.skin === 'string' && cfg.skin ? cfg.skin : 'dsh-black-whale'
+    document.documentElement.dataset.skin = skin
+    petConfig = { autostart: cfg.autostart === true, skin }
+    if (petConfig.autostart !== lastAutostart) {
+      lastAutostart = petConfig.autostart
+      try {
+        invoke('set_autostart', { enabled: petConfig.autostart })
+          .then(() => { try { invoke('debug_log', { msg: 'autostart applied: ' + petConfig.autostart }) } catch (e) {} })
+          .catch((e) => { try { invoke('debug_log', { msg: 'autostart failed: ' + String((e && e.message) || e) }) } catch (e2) {} })
+      } catch (e) { /* invoke 不可用（纯浏览器调试）时忽略 */ }
+    }
+  }
+
+  function deriveState(s) {
+    if (!s || !online) return 'offline'
+    if (s.awaitingApproval?.pending) return 'needYou'
+    if (s.pulse?.kind === 'panic') return 'panic'
+    if (s.pulse?.kind === 'celebrating') return 'celebrating'
+    if (s.session?.status === 'running') return 'working'
+    return 'sleeping'
+  }
+  function deriveActivity(s) {
+    if (!s || s.session?.status !== 'running') return 'idle'
+    return s.activity || 'thinking'
+  }
+
+  // 气泡速率：按 (状态, 活动, 思考强度) 调共享粒子池的两个 CSS 变量
+  // ============ 声呐（Canvas 绘制扩散圆环，search 状态显示） ============
+  const sonarCanvas = $('sonar-canvas')
+  const sctx = sonarCanvas && sonarCanvas.getContext('2d')
+  let sonarRAF = null
+  let sonarT0 = 0
+  function sizeSonar() {
+    if (!sonarCanvas || !sctx) return
+    const dpr = window.devicePixelRatio || 1
+    sonarCanvas.width = 150 * dpr
+    sonarCanvas.height = 150 * dpr
+    sctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  }
+  function drawSonar(now) {
+    sctx.clearRect(0, 0, 150, 150)
+    const t = now - sonarT0
+    const cx = 92, cy = 62   // 鲸鱼头部附近（search 时鲸鱼下移，头在舷窗中上偏右）
+    const period = 2400
+    for (let k = 0; k < 3; k++) {
+      const ph = ((t % period) / period + k / 3) % 1
+      const r = 10 + ph * 55
+      const op = (1 - ph) * 0.7
+      sctx.beginPath()
+      sctx.arc(cx, cy, r, 0, Math.PI * 2)
+      sctx.strokeStyle = 'rgba(140, 210, 255, ' + op.toFixed(2) + ')'
+      sctx.lineWidth = 2.5
+      sctx.shadowColor = 'rgba(140, 210, 255, 0.9)'
+      sctx.shadowBlur = 10
+      sctx.stroke()
+      sctx.shadowBlur = 0
+    }
+    sonarRAF = requestAnimationFrame(drawSonar)
+  }
+  function startSonar() {
+    if (!sctx || sonarRAF) return
+    sonarT0 = performance.now()
+    sonarRAF = requestAnimationFrame(drawSonar)
+  }
+  function stopSonar() {
+    if (sonarRAF) { cancelAnimationFrame(sonarRAF); sonarRAF = null }
+    if (sctx) sctx.clearRect(0, 0, 150, 150)
+  }
+  sizeSonar()
+
+  function bubbleParams(st, act, n) {
+    switch (st) {
+      case 'offline':     return { spd: 9,  op: 0.16 }
+      case 'sleeping':    return { spd: 6,  op: 0.34 }
+      case 'needYou':     return { spd: 1.7, op: 0.8 }
+      case 'panic':       return { spd: 0.9, op: 0.6 }
+      case 'celebrating': return { spd: 1.9, op: 0.75 }
+    }
+    if (act === 'thinking') return { spd: Math.max(1.2, 3.4 - n * 0.55), op: 0.5 + n * 0.12 }
+    if (act === 'search')   return { spd: 2.2, op: 0.55 }
+    return { spd: 2.6, op: 0.5 }
+  }
+
+  function render() {
+    // 调试模式优先：debugMode 非 null 时锁定状态/活动/强度
+    const st = debugMode ? debugMode.state : deriveState(state)
+    const act = debugMode ? debugMode.activity : deriveActivity(state)
+    const n = debugMode ? debugMode.intensity : (state?.activityIntensity ?? 0)
+    const pet = $('pet')
+    pet.dataset.state = st
+    pet.dataset.activity = act
+    pet.dataset.intensity = String(n)
+
+    const bp = bubbleParams(st, act, n)
+    const bub = $('bubbles')
+    bub.style.setProperty('--spd', bp.spd + 's')
+    bub.style.setProperty('--op', String(bp.op))
+
+    // 声呐：search 时用 Canvas 绘制扩散圆环（不依赖 CSS 动画，必定可见）
+    if (act === 'search') startSonar(); else stopSonar()
+
+    // 批准态切换：.card 加 .approving（CSS 控制 actions 显示）+ 窗口加高容纳舷窗下方的审批区
+    const approving = !!pendingAsk
+    if (card.classList.contains('approving') !== approving) {
+      card.classList.toggle('approving', approving)
+    }
+    applyHeight(approving ? HEIGHT_APPROVE : HEIGHT_BASE)
+
+    // 标签：待批准优先；working 显示活动名 + 强度点；其余显示状态词
+    const lbl = $('label')
+    const acts = $('actions')
+    if (pendingAsk) {
+      lbl.className = 'label'
+      lbl.textContent = '⏳ 待批准'
+      acts.classList.add('show')
+      $('ask-text').textContent = (pendingAsk.toolName || '?') + (pendingAsk.reason ? '：' + (pendingAsk.reason.length > 40 ? pendingAsk.reason.slice(0, 40) + '…' : pendingAsk.reason) : '')
+      $('btn-allow').disabled = askAnswered
+      $('btn-deny').disabled = askAnswered
+    } else {
+      acts.classList.remove('show')
+      if (debugMode) {
+        // 调试模式：标签显示锁定的状态/活动
+        lbl.className = 'label'
+        const dn = debugMode.activity === 'thinking' ? ('思考' + debugMode.intensity) : (ACTIVITY_LABEL[debugMode.activity] || debugMode.activity)
+        lbl.textContent = '🔧 ' + (debugMode.state === 'working' ? dn : debugMode.state)
+      } else if (st === 'working') {
+        lbl.className = 'label'
+        lbl.innerHTML = (ACTIVITY_LABEL[act] || act) +
+          '<span class="intensity">' + [0,1,2,3].map((i) => '<i class="' + (i < n ? 'on' : '') + '"></i>').join('') + '</span>'
+      } else {
+        lbl.className = 'label' + (st === 'offline' ? ' offline' : '')
+        lbl.textContent = st === 'offline'
+          ? (discoverErr ? '发现异常: ' + discoverErr
+            : online ? '断线重连中…' : '找 DSH 中…')
+          : st === 'sleeping' ? '睡着了 😴'
+          : st === 'needYou' ? '需要你！'
+          : st === 'panic' ? '出错了！'
+          : st === 'celebrating' ? '搞定啦！'
+          : st
+      }
+    }
+
+    // 多会话角标
+    const running = state?.sessions?.running ?? 0
+    const c = $('count')
+    if (running > 1) { c.textContent = '×' + running; c.classList.add('show') }
+    else c.classList.remove('show')
+  }
+
+  function handleMsg(raw) {
+    try {
+      const msg = JSON.parse(raw)
+      if (msg.type === 'state') {
+        state = msg
+        applyConfig(msg.config) // state 快照内嵌 config（含皮肤/自启动）
+        render()
+      } else if (msg.type === 'config') {
+        applyConfig(msg.config) // 设置变更即时推送
+      } else if (msg.type === 'approval/asked') {
+        // v1 单待批显示：并发多批时显示最新（服务端按 askId 各自结算/回退，不会卡死）
+        pendingAsk = { askId: msg.askId, toolName: msg.toolName, reason: msg.reason }
+        askAnswered = false
+        render()
+      } else if (msg.type === 'approval/settled') {
+        if (pendingAsk && msg.askId === pendingAsk.askId) {
+          pendingAsk = null
+          askAnswered = false
+          render()
+        }
+      }
+      // ping 忽略；协议预留
+    } catch (e) { /* 忽略坏帧 */ }
+  }
+
+  async function ensureLoop() {
+    for (;;) {
+      online = false
+      curPort = null
+      render()
+
+      let port = null
+      // 上次成功的端口作为 hint 先验证（直连一次，免全段扫描）
+      let hint = null
+      try { const n = Number(localStorage.getItem('petPort')); if (Number.isInteger(n) && n > 0) hint = n } catch (e) {}
+      try { port = await invoke('discover_port', { portHint: hint }); discoverErr = null } catch (e) { discoverErr = String((e && e.message) || e); render() }
+
+      if (port) {
+        curPort = port
+        await new Promise((resolve) => {
+          try { ws = new WebSocket('ws://127.0.0.1:' + port + '/dsh-pet/ws') }
+          catch (e) { resolve(); return }
+          ws.onopen = () => {
+            online = true; render()
+            try { localStorage.setItem('petPort', String(port)) } catch (e) { /* 缓存尽力而为 */ }
+            // 版本探测（handshake 带 ACAO:*，可跨源）：v1.1 起显示 host 版本，旧版静默
+            fetch('http://127.0.0.1:' + port + '/dsh-pet/handshake')
+              .then((r) => r.json())
+              .then((j) => { hostVersion = j.hostVersion || null; render() })
+              .catch(() => {})
+          }
+          ws.onmessage = (ev) => handleMsg(ev.data)
+          ws.onclose = () => {
+            ws = null
+            hostVersion = null
+            // 断开即弃待批：服务端检测到全断开会自动把请求交回 GUI 卡片，不会卡死
+            pendingAsk = null
+            askAnswered = false
+            resolve()
+          }
+          ws.onerror = () => { /* close 会跟着来 */ }
+        })
+        // 连上后断开：DSH 可能重启换了端口 → 短暂等待后重新发现
+        await sleep(3000)
+      } else {
+        // 没找到端点：等 8s 再扫（插件没装 / DSH 没开）
+        await sleep(8000)
+      }
+    }
+  }
+
+  // ---- 窗口行为 ----
+  $('close').addEventListener('click', async () => {
+    try { await win.destroy() } catch (e) { window.close() }
+  })
+
+  // ---- 批准应答 ----
+  function answerApproval(outcome) {
+    if (!pendingAsk) return
+    // 调试 mock 审批：不发给服务端，直接模拟清除
+    if (pendingAsk.askId === 'debug') {
+      pendingAsk = null
+      askAnswered = false
+      render()
+      return
+    }
+    if (!ws || ws.readyState !== 1) return
+    askAnswered = true
+    render()
+    try {
+      ws.send(JSON.stringify({ type: 'approval/respond', protocolVersion: 1, askId: pendingAsk.askId, outcome }))
+    } catch (e) {
+      askAnswered = false
+      render()
+    }
+  }
+  $('btn-allow').addEventListener('click', () => answerApproval('allowed-once'))
+  $('btn-deny').addEventListener('click', () => answerApproval('rejected'))
+
+  // 拖拽：显式调用 startDragging（drag-region 属性会被子元素命中拦截，不可靠）
+  $('pet').addEventListener('mousedown', (ev) => {
+    if (ev.button !== 0) return
+    if (ev.target.closest('.close')) return
+    if (ev.target.closest('.debug-menu')) return
+    win.startDragging().catch(() => {})
+  })
+
+  // ============ 调试模式：右键宠物弹出状态菜单 ============
+  const dmMenu = $('debug-menu')
+  // 解析菜单项 data-debug → 调试锁定值
+  const DEBUG_VALUES = {
+    'live': null,
+    'offline': { state: 'offline', activity: 'idle', intensity: 0 },
+    'sleeping': { state: 'sleeping', activity: 'idle', intensity: 0 },
+    'needYou': { state: 'needYou', activity: 'idle', intensity: 0 },
+    'panic': { state: 'panic', activity: 'idle', intensity: 0 },
+    'celebrating': { state: 'celebrating', activity: 'idle', intensity: 0 },
+    'working-thinking': { state: 'working', activity: 'thinking', intensity: 2 },
+    'working-coding': { state: 'working', activity: 'coding', intensity: 0 },
+    'working-cmd': { state: 'working', activity: 'cmd', intensity: 0 },
+    'working-search': { state: 'working', activity: 'search', intensity: 0 },
+    'working-spawning': { state: 'working', activity: 'spawning', intensity: 0 },
+  }
+  function openDebugMenu() {
+    dmMenu.classList.add('open')
+    // 高亮当前锁定项
+    const cur = debugMode ? (debugMode.state === 'working'
+      ? 'working-' + debugMode.activity + (debugMode.activity === 'thinking' ? debugMode.intensity : '')
+      : debugMode.state) : 'live'
+    dmMenu.querySelectorAll('.dm-item').forEach((it) => {
+      it.classList.toggle('active', it.dataset.debug === cur)
+    })
+    // whalebuddy 设置入口：未连 DSH 时禁用
+    dmMenu.querySelectorAll('[data-action="open-config"]').forEach((it) => {
+      it.toggleAttribute('disabled', !curPort)
+    })
+  }
+  function closeDebugMenu() {
+    dmMenu.classList.remove('open')
+  }
+  // 右键宠物弹出菜单（contextmenu 不用于拖拽）
+  $('pet').addEventListener('contextmenu', (ev) => {
+    ev.preventDefault()
+    openDebugMenu()
+  })
+  // 点击菜单项：先处理 action（whalebuddy 设置入口），再切换调试锁定
+  dmMenu.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.dm-item')
+    if (!btn) return
+    if (btn.dataset.action === 'open-config') {
+      if (!curPort) {
+        try { invoke('debug_log', { msg: 'open-config blocked: not connected' }) } catch (e) {}
+        closeDebugMenu()
+        return
+      }
+      const url = 'http://127.0.0.1:' + curPort + '/dsh-pet/config'
+      try {
+        invoke('open_url', { url })
+          .then(() => { try { invoke('debug_log', { msg: 'opened config: ' + url }) } catch (e) {} })
+          .catch((e) => { try { invoke('debug_log', { msg: 'open_url failed: ' + String((e && e.message) || e) }) } catch (e2) {} })
+      } catch (e) { /* invoke 不可用 */ }
+      closeDebugMenu()
+      return
+    }
+    const key = btn.dataset.debug
+    if (key === undefined) return
+    debugMode = DEBUG_VALUES[key]
+    // needYou 需要模拟一个待批准请求，才能看到审批区/按钮
+    if (key === 'needYou') {
+      pendingAsk = { askId: 'debug', toolName: 'escalate sandbox', reason: '请求提升沙箱权限执行命令' }
+      askAnswered = false
+    } else if (pendingAsk && pendingAsk.askId === 'debug') {
+      pendingAsk = null
+      askAnswered = false
+    }
+    closeDebugMenu()
+    render()
+  })
+  // 点击菜单外（宠物本体空白区）关闭菜单
+  document.addEventListener('click', (ev) => {
+    if (dmMenu.classList.contains('open') && !ev.target.closest('.debug-menu')) {
+      closeDebugMenu()
+    }
+  })
+
+  // 位置记忆（物理像素）——只在窗口回到基准尺寸时保存，避免坏值
+  let saveTimer = null
+  win.onMoved(({ payload }) => {
+    clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => {
+      try { localStorage.setItem('petPos', JSON.stringify({ x: payload.x, y: payload.y })) } catch (e) {}
+    }, 500)
+  })
+  ;(async () => {
+    try {
+      const pos = JSON.parse(localStorage.getItem('petPos') || 'null')
+      if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+        // 校验位置在屏幕内
+        let ok = true
+        try {
+          const mon = await win.currentMonitor()
+          if (mon && mon.size) {
+            if (pos.x < -50 || pos.y < -50 ||
+                pos.x > mon.size.width + 50 || pos.y > mon.size.height + 50) ok = false
+          }
+        } catch (e) {}
+        if (ok) await win.setPosition(new T.window.PhysicalPosition(pos.x, pos.y))
+      }
+    } catch (e) {}
+  })()
+
+  render()
+  ensureLoop()
+})()
+</script>
+</body>
+</html>
