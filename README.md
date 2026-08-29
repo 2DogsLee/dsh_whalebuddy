@@ -1,5 +1,7 @@
 # whalebuddy 🐋 — DeepSeek Harness 桌面宠物
 
+<img width="178" height="210" alt="image" src="https://github.com/user-attachments/assets/eb2b2a36-a84e-413c-bbca-37c4f7d9ff5d" />
+
 透明置顶的桌面宠物，实时感知 DeepSeek Harness（DSH）中 agent 会话的运行状态：
 任务在跑时它干活，空闲时它睡觉，等待批准时它敲门提醒你——并可在 DSH 设置菜单里配置**开机自启动**与**皮肤**。
 
