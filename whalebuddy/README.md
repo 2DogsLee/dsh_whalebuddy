@@ -8,7 +8,12 @@ DeepSeek Harness 桌面宠物感知层插件：把 DSH 的 agent 状态折叠成
 
 ## 初次使用（给 AI agent / 人类）
 
-完整部署（含桌面壳构建与验证）见**仓库根 README 的「部署手册（给 AI agent 的操作指南）」**。
+完整部署（含桌面壳构建与验证）见**仓库根 README 的「部署手册（给 AI agent 的操作指南））」**。
+
+**平台支持**：本插件（感知层）纯 Node 零平台依赖，DSH 能跑就能装。**桌面壳（宠物窗口）目前仅
+Windows 10/11**——端口发现/开机自启/打开配置页用的是 Windows 专属实现（netstat/reg.exe/cmd start），
+macOS/Linux 移植路径见根 README「平台支持」表。
+
 仅装本插件包的要点：
 
 1. **定位 DSH_HOME**：默认 `%USERPROFILE%\.dsh`（Windows）/ `~/.dsh`；设了 `DSH_HOME` 环境变量则用之。

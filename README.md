@@ -3,12 +3,29 @@
 <img width="178" height="210" alt="image" src="https://github.com/user-attachments/assets/eb2b2a36-a84e-413c-bbca-37c4f7d9ff5d" /> <img width="178" height="210" alt="image" src="https://github.com/user-attachments/assets/d46ac100-abd3-43b9-816d-0638b807905a" /> <img width="178" height="210" alt="image" src="https://github.com/user-attachments/assets/fd5850ad-bef0-4419-9f73-8964b6414359" /> <img width="178" height="210" alt="image" src="https://github.com/user-attachments/assets/d38281be-fdea-4c55-b07c-27b6a368d002" />
 
 透明置顶的桌面宠物，实时感知 DeepSeek Harness（DSH）中 agent 会话的运行状态：
-任务在跑时它干活，空闲时它睡觉，等待批准时它敲门提醒你——并可在 DSH 设置菜单里配置**开机自启动**与**皮肤**。
+任务在跑时它干活，空闲时它睡觉，等待批准时它敲门提醒你——并可在配置页设置**开机自启动**与**皮肤**。
+
+## 平台支持
+
+| 组件 | Windows 10/11 | macOS | Linux |
+|---|---|---|---|
+| 感知层插件 `whalebuddy/` | ✅ 完整支持 | 🟡 理论可用（纯 Node 零平台依赖，未实测） | 🟡 理论可用（同左） |
+| 桌面壳 `app/`（宠物窗口） | ✅ 完整支持 | ❌ 未适配 | ❌ 未适配 |
+
+**桌面壳目前仅支持 Windows**，平台相关的三处实现：
+
+| 功能 | Windows 实现 | macOS/Linux 移植路径 |
+|---|---|---|
+| 端口发现 | `netstat -ano` + 进程过滤探测 | `lsof -iTCP -sTCP:LISTEN` / `ss -tlnp` |
+| 开机自启 | `reg.exe` 写 `HKCU\...\Run` | LaunchAgent（macOS）/ `~/.config/autostart`（Linux） |
+| 打开配置页 | `cmd /c start` | `open`（macOS）/ `xdg-open`（Linux） |
+
+其他前置：**WebView2 运行时**（Windows 10/11 一般自带；随 DSH Desktop 已具备）、**Rust/MSVC 工具链**（仅构建时需要）。感知层插件只要 DSH 能跑就能装，与平台无关。
 
 ```
 ┌─ DSH 进程 ───────────────────────────────┐   ┌─ 桌面 ──────────────────┐
 │ agent 事件流 → whalebuddy（感知层插件）   │   │ Tauri 宠物窗（透明置顶）│
-│ (DSH bundle 插件包, 设置菜单注册项)       │   │  Rust 端口发现 + WS 客户端 │
+│ (DSH bundle 插件包, /dsh-pet/config)      │   │  Rust 端口发现 + WS 客户端 │
 │   折叠成 state + config ── WS 广播 ──────┼──▶│  状态动画 + 皮肤 data-skin│
 │   approval waterfall 宠物回答者 ◀─────────┼───│  ✓允许 / ✗拒绝 按钮      │
 │   settings: whalebuddy.autostart/skin ───┼──▶│  autostart → Run 键写删 │
