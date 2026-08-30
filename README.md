@@ -121,9 +121,15 @@ Invoke-WebRequest "http://127.0.0.1:$port/dsh-pet/handshake" -UseBasicParsing | 
 
 ### 设置项怎么用（告诉用户）
 
-- **入口**：宠物右键 →「🐋 whalebuddy 设置…」（自动带当前端口打开浏览器），或手动访问
+- **入口 ①（推荐）**：DSH GUI →「设置 → 插件 → 插件配置」→「🐋 桌面宠物 whalebuddy」卡片
+  （重启 DSH 后出现；卡片内含运行状态、立即启动按钮与全部设置项）
+- **入口 ②**：宠物右键 →「🐋 whalebuddy 设置…」（自动带当前端口打开浏览器），或手动访问
   `http://127.0.0.1:<DSH端口>/dsh-pet/config`
-- **autostart**：勾选保存 → 即写 `HKCU\...\CurrentVersion\Run\whalebuddy` → 下次开机宠物自启
+- **autostart**：勾选保存 → 宠物在线时即写 `HKCU\...\CurrentVersion\Run\whalebuddy` → 下次开机宠物自启
+- **launchOnDshStart**：勾选保存 → DSH 每次启动后进入 2 分钟观察期：宠物进程已在跑就等它
+  自行重连（断连重连通常几秒内完成）；进程不在则 ~5s 内拉起（宠物路径 = `petPath` 设置 →
+  注册表 Run 键两级发现；进程存活时不重复拉起——WebView2 目录互锁会让新实例立即退出）
+- **petPath**：宠物 exe 完整路径；留空则读开机自启注册表键
 - **skin**：皮肤 id（当前默认 `dsh-black-whale`；扩展见 `app/ui/index.html` 皮肤区注释）
 
 ### 常见故障
@@ -156,14 +162,19 @@ cargo run            # 开发运行（首次编译 5-15 分钟）
 在 profile package.json 的 `dsh.profile.bundles` 追加 `"whalebuddy"`，重启 DSH 即可。
 （官方 CLI 等价操作：`dsh plugin --profile <name> add whalebuddy`）
 
-## 设置项（whalebuddy 配置页）
+## 设置项（whalebuddy 设置卡片 / 配置页）
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `autostart` | `false` | 开机自启动宠物（桌面壳写/删 `HKCU\...\Run\whalebuddy`） |
+| `launchOnDshStart` | `false` | DSH Desktop 启动时自动启动宠物（2 分钟观察期：进程在等重连，进程不在则拉起） |
+| `petPath` | `""` | 宠物 exe 完整路径；留空 = 按注册表 Run 键自动发现（拉起与「立即启动」用） |
 | `skin` | `dsh-black-whale` | 皮肤 id；前端按 `html[data-skin]` 换肤（扩展见 `app/ui/index.html` 皮肤区注释） |
 
-**配置入口**（DSH 设置菜单不渲染无 client UI 包的 namespace，见 docs/10 §7）：
+**配置入口**：
+- DSH GUI「设置 → 插件 → 插件配置」→「🐋 桌面宠物 whalebuddy」卡片（v0.2 起，
+  `whalebuddy/client/client.js` 注册进 `settings.plugin.item` 插槽，与 Host 侧
+  `whalebuddy` 设置命名空间同名配对；保存走官方 settingsScope 通道）
 - 桌面壳**右键菜单 →「🐋 whalebuddy 设置…」**（默认浏览器打开）
 - 或直接访问 `http://127.0.0.1:<DSH端口>/dsh-pet/config`
 
@@ -176,7 +187,7 @@ cargo run            # 开发运行（首次编译 5-15 分钟）
 | 宠物形态 | 真桌面悬浮宠物（透明置顶独立窗口） |
 | 宠物壳技术栈 | Tauri v2（Windows 复用系统 WebView2，动画走 Web 渲染） |
 | 感知层 | DSH **bundle 插件包**（`dsh.bundle` manifest），可分发到任意 DSH |
-| 设置集成 | 感知层注册 `whalebuddy` settings namespace + 自带 `/dsh-pet/config` 配置页（DSH 设置菜单需配套 client UI 包，未做） |
+| 设置集成 | `whalebuddy` settings namespace + `whalebuddy/client` 设置卡片（DSH「设置 → 插件 → 插件配置」菜单）+ 自带 `/dsh-pet/config` 配置页 + DSH 启动自启拉起（`launchOnDshStart`） |
 | 传输层 | WebSocket，复用 DSH 现有 webServer 端口（`registerUpgrade`），不新开端口 |
 | 端口发现 | 桌面壳 Rust 侧做：DSH_WEB_URL 环境变量 → 8 线程扫描 49152–65535 |
 | 应用标识符 | `dev.dsh.pet.app`（不能用 `dev.dsh.pet`：与宿主 DSH Desktop 撞 identifier，WebView2 用户数据目录互锁） |

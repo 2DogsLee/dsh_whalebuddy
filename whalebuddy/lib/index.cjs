@@ -3,13 +3,19 @@
  *
  * 包形态：npm 包 + package.json 里 dsh.bundle.patch 声明 → 作为 profile bundle
  * 被 DSH 的 layer stack 自动加载（安装说明见 README）。可开源分发到任意 DSH。
+ * client/client.js（浏览器半侧）把设置卡片注册进 settings.plugin.item 插槽——
+ * 设置项出现在 DSH「设置 → 插件 → 插件配置」菜单（与 Host namespace 同名配对）。
  *
  * 职责：
  *  1. 感知：监听 Host 事件流 → 折叠成 state 快照 → /dsh-pet/handshake (HTTP, CORS)
  *     与 /dsh-pet/ws (手写极简 RFC6455) 广播给桌面宠物（whalebuddy 桌面壳）。
- *  2. 设置：向 DSH settings 服务注册 "whalebuddy" namespace（autostart/skin），
- *     配置项自动出现在 DSH 设置菜单；变更经 settings/watch 感知并即时广播
- *     {type:'config'} 给桌面壳（autostart → 桌面壳写/删系统 Run 键；skin → 换肤）。
+ *  2. 设置：向 DSH settings 服务注册 "whalebuddy" namespace
+ *     （autostart/launchOnDshStart/petPath/skin），配置项出现在 DSH 设置菜单的
+ *     「插件配置」分区（客户端卡片）与自带 /dsh-pet/config 配置页；变更经
+ *     settings/watch 感知并即时广播 {type:'config'} 给桌面壳
+ *     （autostart → 桌面壳写/删系统 Run 键；skin → 换肤）。
+ *     launchOnDshStart=true 时每次 DSH 启动（及开关打开时）若宠物未在线，
+ *     本插件自动 spawn 拉起宠物程序（petPath 设置 → 注册表 Run 键两级发现）。
  *  3. 批准交互：approval/request waterfall 里当"宠物回答者"——宠物客户端在线时
  *     把待批请求推给宠物（approval/asked），等宠物回 approval/respond；
  *     宠物不在线 / 全部断开 / 超时（5min）则 next() 交回 api-proxy 的 GUI 卡片路径。
@@ -29,15 +35,23 @@
  * 叶子字段，绝不整体序列化。
  */
 const { randomUUID } = require('node:crypto')
+const { execFile, spawn } = require('node:child_process')
+const fsSync = require('node:fs')
 
 // schemastery（DSH 内置，有 CJS 出口）——settings schema 用；加载失败则降级（settings 不可用）
 let z = null
 try { z = require('@deepseek-ai/schemastery') } catch (e) { /* settings 不可用时降级 */ }
 
-// whalebuddy 设置 schema：autostart（开机自启动）+ skin（皮肤，预留扩展）。
+// whalebuddy 设置 schema：autostart（开机自启动）+ launchOnDshStart（DSH 启动时
+// 自动拉起宠物）+ petPath（宠物 exe 路径，空=按注册表 Run 键发现）+ skin（皮肤）。
 // base 是插件组合配置层的默认值；用户在 DSH 设置菜单的改动覆盖它。
 const WHALEBUDDY_NS = 'whalebuddy'
-const DEFAULT_CONFIG = { autostart: false, skin: 'dsh-black-whale' }
+const DEFAULT_CONFIG = {
+  autostart: false,
+  launchOnDshStart: false,
+  petPath: '',
+  skin: 'dsh-black-whale',
+}
 
 module.exports = {
   name: 'whalebuddy',
@@ -52,7 +66,12 @@ module.exports = {
 
     // whalebuddy 配置（settings 合并结果；启动时为默认值，settings 服务注入后刷新）。
     // 定义在 leader 探测之前，因为 handshake handler 会引用它。
-    const cfg = { autostart: DEFAULT_CONFIG.autostart, skin: DEFAULT_CONFIG.skin }
+    const cfg = {
+      autostart: DEFAULT_CONFIG.autostart,
+      launchOnDshStart: DEFAULT_CONFIG.launchOnDshStart,
+      petPath: DEFAULT_CONFIG.petPath,
+      skin: DEFAULT_CONFIG.skin,
+    }
     // settings scope 引用（settings 段填，config 路由 POST 写回用）
     let writeConfig = async () => { throw new Error('settings service not available') }
 
@@ -68,7 +87,10 @@ module.exports = {
             'cache-control': 'no-store',
             'access-control-allow-origin': '*',
           })
-          res.end(JSON.stringify({ ok: true, name: 'whalebuddy', protocolVersion: 1, hostVersion: '1.1', wsPath: '/dsh-pet/ws', config: { autostart: cfg.autostart, skin: cfg.skin } }))
+          res.end(JSON.stringify({
+            ok: true, name: 'whalebuddy', protocolVersion: 1, hostVersion: '1.2', wsPath: '/dsh-pet/ws',
+            config: { autostart: cfg.autostart, launchOnDshStart: cfg.launchOnDshStart, petPath: cfg.petPath, skin: cfg.skin },
+          }))
         },
       }))
 
@@ -82,7 +104,9 @@ module.exports = {
         handler: async (req, res) => {
           if (req.method !== 'POST') {
             const skin = escapeHtml(cfg.skin)
+            const petPath = escapeHtml(cfg.petPath)
             const checked = cfg.autostart ? ' checked' : ''
+            const checkedLods = cfg.launchOnDshStart ? ' checked' : ''
             const html = `<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>whalebuddy 设置</title>` +
               `<style>body{font-family:-apple-system,'Segoe UI',sans-serif;background:#0e1726;color:#cfd8e3;max-width:480px;margin:48px auto;padding:0 20px}` +
               `h1{font-size:18px;font-weight:600;margin:0 0 24px}label{display:block;margin:16px 0 6px;font-size:13px;color:#8aa0b4}` +
@@ -91,9 +115,15 @@ module.exports = {
               `button{background:#2b6cff;color:#fff;border:0;border-radius:6px;padding:9px 18px;font:inherit;cursor:pointer}` +
               `button:hover{background:#3b7cff}.hint{font-size:12px;color:#8aa0b4;margin-top:8px}</style></head><body>` +
               `<h1>🐋 whalebuddy 设置</h1>` +
+              `<p style="font-size:12px;color:#8aa0b4">推荐在 DSH「设置 → 插件 → 插件配置」菜单里配置（本页为轻量备用）。</p>` +
               `<form method="post" action="/dsh-pet/config">` +
               `<div class="row"><input type="checkbox" id="autostart" name="autostart" value="1"${checked}>` +
               `<label for="autostart" style="margin:0">开机自启动桌面宠物（Windows 注册表 Run 键）</label></div>` +
+              `<div class="row"><input type="checkbox" id="launchOnDshStart" name="launchOnDshStart" value="1"${checkedLods}>` +
+              `<label for="launchOnDshStart" style="margin:0">DSH Desktop 启动时自动启动宠物（未在线时自动拉起）</label></div>` +
+              `<label for="petPath">宠物程序路径</label>` +
+              `<input type="text" id="petPath" name="petPath" value="${petPath}" placeholder="留空 = 按注册表 Run 键自动发现">` +
+              `<div class="hint">dsh-pet.exe 完整路径；用于 DSH 启动自启与「立即启动」。留空则读开机自启注册表键。</div>` +
               `<label for="skin">皮肤</label>` +
               `<input type="text" id="skin" name="skin" value="${skin}" placeholder="dsh-black-whale">` +
               `<div class="hint">皮肤 id 由桌面壳识别；默认 dsh-black-whale。</div>` +
@@ -111,6 +141,8 @@ module.exports = {
             const params = new URLSearchParams(body)
             const patch = {
               autostart: params.get('autostart') === '1',
+              launchOnDshStart: params.get('launchOnDshStart') === '1',
+              petPath: (params.get('petPath') || '').toString().slice(0, 512),
               skin: (params.get('skin') || '').toString().slice(0, 64) || DEFAULT_CONFIG.skin,
             }
             await writeConfig(patch)
@@ -203,7 +235,7 @@ module.exports = {
         workflow: { running: agg.workflow.running, phase: agg.workflow.phase },
         tokens: { estimated: agg.tokens.estimated },
         pulse: agg.pulse ? { kind: agg.pulse.kind, at: agg.pulse.at } : null,
-        config: { autostart: cfg.autostart, skin: cfg.skin },
+        config: { autostart: cfg.autostart, launchOnDshStart: cfg.launchOnDshStart, petPath: cfg.petPath, skin: cfg.skin },
       }
     }
 
@@ -239,7 +271,8 @@ module.exports = {
     const markDirty = () => { try { throttledFlush() } catch (e) { console.error('[whalebuddy] markDirty', e) } }
 
     // ---------------- 1.5 whalebuddy 设置（settings 服务可选） ----------------
-    // 注册 "whalebuddy" namespace → DSH 设置菜单自动渲染 autostart/skin 两项；
+    // 注册 "whalebuddy" namespace → DSH「设置 → 插件 → 插件配置」菜单的客户端卡片
+    // （client/client.js）与自带 /dsh-pet/config 配置页均可读写；
     // 用户改动经 scope.watch 感知 → 即时广播 {type:'config'} 给桌面壳。
     // settings 服务不存在（无 dsh-settings-file 的组合）时静默降级，不影响感知。
     try {
@@ -252,6 +285,8 @@ module.exports = {
         try {
           scope = sctx.settings.register(WHALEBUDDY_NS, z.object({
             autostart: z.boolean().default(DEFAULT_CONFIG.autostart),
+            launchOnDshStart: z.boolean().default(DEFAULT_CONFIG.launchOnDshStart),
+            petPath: z.string().default(DEFAULT_CONFIG.petPath),
             skin: z.string().default(DEFAULT_CONFIG.skin),
           }), { base: { ...DEFAULT_CONFIG } })
           // 让 /dsh-pet/config POST 能写回 settings（PRG 模式 → scope.update → watch → broadcast）
@@ -265,17 +300,27 @@ module.exports = {
           try { v = scope.get() || {} } catch (e) { /* 读不到就用默认 */ }
           const next = {
             autostart: v.autostart === true,
+            launchOnDshStart: v.launchOnDshStart === true,
+            petPath: typeof v.petPath === 'string' ? v.petPath.slice(0, 512) : '',
             skin: typeof v.skin === 'string' && v.skin ? v.skin : DEFAULT_CONFIG.skin,
           }
-          const changed = next.autostart !== cfg.autostart || next.skin !== cfg.skin
+          const changed = next.autostart !== cfg.autostart
+            || next.launchOnDshStart !== cfg.launchOnDshStart
+            || next.petPath !== cfg.petPath
+            || next.skin !== cfg.skin
           cfg.autostart = next.autostart
+          cfg.launchOnDshStart = next.launchOnDshStart
+          cfg.petPath = next.petPath
           cfg.skin = next.skin
           if (changed) {
             try {
-              broadcast({ type: 'config', protocolVersion: 1, ts: Date.now(), config: { autostart: cfg.autostart, skin: cfg.skin } })
+              broadcast({ type: 'config', protocolVersion: 1, ts: Date.now(), config: { ...cfg } })
               markDirty()
             } catch (e) { console.error('[whalebuddy] config broadcast', e) }
           }
+          // launchOnDshStart 打开（或 DSH 启动首次读到 true）→ 启动观察器：
+          // 已连接即结束；进程存活等它重连；进程不在则拉起（见 1.6）
+          maybeLaunchPet(next.launchOnDshStart ? 'settings' : 'startup-check')
         }
         applyConfig()
         const stopWatch = scope.watch(applyConfig)
@@ -284,6 +329,130 @@ module.exports = {
         }, 'whalebuddy: settings scope')
       })
     } catch (e) { console.error('[whalebuddy] settings inject', e) }
+
+    // ---------------- 1.6 宠物进程拉起（launchOnDshStart / 手动） ----------------
+    // 发现顺序：petPath 设置（须存在）→ 注册表 Run 键（开机自启键里已有 exe 路径）。
+    // 守卫：宠物已在线不拉起；宠物进程存活（未连上）不拉起——WebView2 用户数据目录
+    // 互锁会让新实例立即退出，表现为"自启没生效"；自动拉起 15s 防抖；
+    // 手动（force）绕过防抖不绕过在线/存活检查。
+    const RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
+    let lastLaunchAt = 0
+    let watchTimer = null
+
+    function readRunKeyExe() {
+      return new Promise((resolve) => {
+        try {
+          execFile('reg', ['query', RUN_KEY, '/v', 'whalebuddy'], { windowsHide: true }, (err, stdout) => {
+            if (err) { resolve(null); return }
+            const s = String(stdout || '')
+            // 规范形态是带引号的完整路径 + " --autostart" 尾参；兜底无引号形态（用户手改键值）
+            const quoted = /"([^"]+\.(?:exe|EXE))"/.exec(s)
+            if (quoted) { resolve(quoted[1]); return }
+            const bare = /([A-Za-z]:\\[^\s]+\.exe)/i.exec(s)
+            resolve(bare ? bare[1] : null)
+          })
+        } catch (e) { resolve(null) }
+      })
+    }
+
+    async function resolvePetExe() {
+      const p = String(cfg.petPath || '').trim().replace(/^"|"$/g, '')
+      if (p) {
+        try {
+          if (fsSync.existsSync(p)) return p
+        } catch (e) { /* 落到 Run 键发现 */ }
+        console.warn(`[whalebuddy] petPath 路径不存在：${p}，回退注册表 Run 键`)
+      }
+      return readRunKeyExe()
+    }
+
+    // tasklist CSV 输出里找进程名（locale 无关：按行首 "名字" 匹配；未找到时输出的是
+    // 本地化 INFO 行，不以引号开头，天然不匹配）。
+    function tasklistHasProcess(stdout, base) {
+      const want = '"' + String(base || '').toLowerCase() + '"'
+      return String(stdout || '')
+        .split(/\r?\n/)
+        .some((line) => line.trim().toLowerCase().startsWith(want))
+    }
+
+    function petProcessAlive(exe) {
+      return new Promise((resolve) => {
+        try {
+          const base = String(exe || '').split(/[\\/]+/).pop() || 'dsh-pet.exe'
+          execFile('tasklist', ['/FI', `IMAGENAME eq ${base}`, '/FO', 'CSV', '/NH'], { windowsHide: true }, (err, stdout) => {
+            resolve(!err && tasklistHasProcess(stdout, base))
+          })
+        } catch (e) { resolve(false) }
+      })
+    }
+
+    async function launchPet(reason, opts) {
+      const force = !!(opts && opts.force)
+      if (!leader) return { launched: false, reason: 'follower' }
+      if (conns.size > 0) return { launched: false, reason: 'pet-connected' }
+      const exe = await resolvePetExe()
+      if (!exe) {
+        console.warn('[whalebuddy] 未找到宠物程序（petPath 未配置且注册表 Run 键无 whalebuddy 项）')
+        return { launched: false, reason: 'exe-not-found' }
+      }
+      // 宠物进程已在跑（只是还没连上）：绝不重复拉起——WebView2 用户数据目录互锁，
+      // 新实例会立即退出（表现为"自启没生效"）。它自己的重连循环（断开 3s 后重发现，
+      // netstat 命中约 1s）会很快连回来。
+      if (await petProcessAlive(exe)) {
+        console.log(`[whalebuddy] 宠物进程已在运行（${exe}），等待其自行重连 DSH`)
+        return { launched: false, reason: 'process-running', exe }
+      }
+      const now = Date.now()
+      if (!force && now - lastLaunchAt < 15000) return { launched: false, reason: 'debounced' }
+      lastLaunchAt = now
+      // 测试/诊断钩子：WHALEBUDDY_DRY_RUN=1 时只解析路径不真正 spawn
+      if (process.env.WHALEBUDDY_DRY_RUN === '1') {
+        console.log(`[whalebuddy] dry-run（不启动）：${exe}`)
+        return { launched: true, dryRun: true, exe, reason }
+      }
+      try {
+        const child = spawn(exe, [], { detached: true, stdio: 'ignore', windowsHide: true })
+        child.unref()
+        console.log(`[whalebuddy] 宠物已拉起（${reason}）：${exe} pid=${child.pid}`)
+        return { launched: true, exe, reason }
+      } catch (e) {
+        console.error('[whalebuddy] 拉起宠物失败：', (e && e.message) || e)
+        return { launched: false, reason: 'spawn-failed' }
+      }
+    }
+
+    // 观察器（替代单次 4s 定时）：开关打开 / settings 提交后启动，每 5s 检查一次，
+    // 最多观察 120s：
+    //   已连接            → 结束（宠物在）
+    //   进程活着但没连上  → 继续等（宠物断连重连循环自己会连回来，重复拉起只会
+    //                       因 WebView2 目录锁失败）
+    //   进程不在          → 拉起一次（launchPet 内部含防抖；拉起失败即结束观察）
+    // conns 只在延迟回调里读，避免 settings 回调在 conns（第 2 节定义）初始化前踩 TDZ。
+    function stopLaunchWatch() {
+      if (watchTimer) { clearInterval(watchTimer); watchTimer = null }
+    }
+
+    function maybeLaunchPet(reason) {
+      if (cfg.launchOnDshStart !== true) return
+      if (watchTimer) return // 观察周期已在进行
+      const startedAt = Date.now()
+      let saidWaiting = false
+      const tick = async () => {
+        if (cfg.launchOnDshStart !== true || conns.size > 0) { stopLaunchWatch(); return }
+        const r = await launchPet(reason)
+        if (r.reason === 'process-running') {
+          if (!saidWaiting) { saidWaiting = true; console.log('[whalebuddy] 观察中：宠物进程存活，等待重连') }
+        } else if (r.reason === 'exe-not-found' || r.reason === 'spawn-failed') {
+          stopLaunchWatch() // 再试也无意义，等用户配置路径
+        }
+        if (Date.now() - startedAt > 120000) {
+          console.log('[whalebuddy] DSH 启动自启观察周期结束（120s）')
+          stopLaunchWatch()
+        }
+      }
+      watchTimer = setInterval(() => { tick().catch(() => { /* 已在内部记日志 */ }) }, 5000)
+      if (typeof watchTimer.unref === 'function') watchTimer.unref()
+    }
 
     // ---------------- 2. 极简 RFC6455 服务端 ----------------
     function sha1Words(bytes) {
@@ -878,8 +1047,52 @@ module.exports = {
       }, 10000))
     } catch (e) { console.error('[whalebuddy] heartbeat', e) }
 
+    // ---------------- 5.5 设置卡片 API（GUI 同源 fetch；GET/POST 共用 handler） ----------------
+    // /dsh-pet/api/status：「插件配置」卡片显示宠物在线状态 + 当前生效配置。
+    keep(ctx.webServer.register({
+      kind: 'exact',
+      path: '/dsh-pet/api/status',
+      handler: (req, res) => {
+        res.writeHead(200, {
+          'content-type': 'application/json',
+          'cache-control': 'no-store',
+          'access-control-allow-origin': '*',
+        })
+        res.end(JSON.stringify({
+          ok: true,
+          name: 'whalebuddy',
+          protocolVersion: 1,
+          hostVersion: '1.2',
+          config: { autostart: cfg.autostart, launchOnDshStart: cfg.launchOnDshStart, petPath: cfg.petPath, skin: cfg.skin },
+          pet: { connected: conns.size > 0, clients: conns.size },
+        }))
+      },
+    }))
+    // /dsh-pet/api/launch：卡片「立即启动」按钮 → force 拉起（绕过防抖，不绕过在线检查）。
+    keep(ctx.webServer.register({
+      kind: 'exact',
+      path: '/dsh-pet/api/launch',
+      handler: async (req, res) => {
+        const send = (code, obj) => {
+          res.writeHead(code, {
+            'content-type': 'application/json',
+            'cache-control': 'no-store',
+            'access-control-allow-origin': '*',
+          })
+          res.end(JSON.stringify(obj))
+        }
+        try {
+          const r = await launchPet('manual', { force: true })
+          send(200, { ok: true, ...r })
+        } catch (e) {
+          send(500, { ok: false, error: String((e && e.message) || e) })
+        }
+      },
+    }))
+
     // ---------------- 6. 统一清理 ----------------
     ctx.effect(() => () => {
+      stopLaunchWatch()
       for (let i = 0; i < disposers.length; i++) {
         try { disposers[i]() } catch (e) { /* 清理尽力而为 */ }
       }
@@ -894,6 +1107,6 @@ module.exports = {
       conns.clear()
     }, 'whalebuddy: teardown')
 
-    console.log('[whalebuddy v0.1] perception active: /dsh-pet/handshake + /dsh-pet/ws (approval answerer armed, prepend)')
+    console.log('[whalebuddy v0.2.1] perception active: /dsh-pet/handshake + /dsh-pet/ws + /dsh-pet/api/* (approval answerer armed, prepend; dsh-start launcher watching)')
   },
 }

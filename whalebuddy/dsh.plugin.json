@@ -1,7 +1,7 @@
 {
   "name": "whalebuddy",
-  "description": "whalebuddy — DeepSeek Harness 桌面宠物感知层（状态广播 + autostart/skin 设置）",
-  "version": "0.1.0",
+  "description": "whalebuddy — DeepSeek Harness 桌面宠物感知层（状态广播 + 启动/运行状态设置卡片）",
+  "version": "0.2.0",
   "entry": {
     "name": "whalebuddy",
     "inject": [

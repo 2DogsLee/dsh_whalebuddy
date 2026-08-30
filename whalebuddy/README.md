@@ -1,14 +1,16 @@
 # whalebuddy 🐋
 
 DeepSeek Harness 桌面宠物感知层插件：把 DSH 的 agent 状态折叠成桌面宠物画面（舷窗），
-并提供 **开机自启动** 与 **皮肤** 配置（自带轻量配置页）。
+并在 DSH「设置 → 插件 → 插件配置」菜单提供 **启动与运行状态** 配置卡片
+（开机自启 / DSH 启动自启 / 宠物路径 / 皮肤；亦附自带轻量配置页）。
 
-- **感知层**（本包）：监听 DSH 事件流 → 折叠 state → 经 `/dsh-pet/ws` 广播给桌面壳；注册 `whalebuddy` settings namespace。
+- **感知层**（本包 host 半边 `lib/index.cjs`）：监听 DSH 事件流 → 折叠 state → 经 `/dsh-pet/ws` 广播给桌面壳；注册 `whalebuddy` settings namespace；`launchOnDshStart` 打开时自动拉起宠物进程。
+- **设置卡片**（本包 client 半边 `client/client.js`）：注册进 `settings.plugin.item` 插槽，设置项出现在 DSH 设置菜单「插件配置」分区；保存走官方 settingsScope 通道。
 - **桌面壳**（独立程序，本仓库 `app/`）：Tauri 透明置顶窗口，渲染黑鲸 + 状态动画，把 `autostart` 落到系统 Run 键。
 
 ## 初次使用（给 AI agent / 人类）
 
-完整部署（含桌面壳构建与验证）见**仓库根 README 的「部署手册（给 AI agent 的操作指南））」**。
+完整部署（含桌面壳构建与验证）见**仓库根 README 的「部署手册（给 AI agent 的操作指南）」**。
 
 **平台支持**：本插件（感知层）纯 Node 零平台依赖，DSH 能跑就能装。**桌面壳（宠物窗口）目前仅
 Windows 10/11**——端口发现/开机自启/打开配置页用的是 Windows 专属实现（netstat/reg.exe/cmd start），
@@ -74,12 +76,18 @@ cp -r whalebuddy ~/.dsh/profiles/node_modules/whalebuddy
 
 3) 重启 DSH（或重载 profile）。插件加载后：
    - DSH 事件感知 + WS 广播照常；
-   - **设置入口**：桌面壳右键菜单「🐋 whalebuddy 设置…」或直接浏览器访问
-     `http://127.0.0.1:<DSH端口>/dsh-pet/config`——极简 HTML 配置页（autostart 开关 + skin 输入），
+   - **设置入口 ①（推荐）**：DSH GUI →「设置 → 插件 → 插件配置」→「🐋 桌面宠物 whalebuddy」卡片
+     （client 半边 `client/client.js` 声明 `dsh.client`，客户端模块系统按包名发现并装载；
+     卡片内含运行状态行、立即启动按钮、四个设置项，保存走官方 settingsScope 通道）。
+   - **设置入口 ②**：桌面壳右键菜单「🐋 whalebuddy 设置…」或直接浏览器访问
+     `http://127.0.0.1:<DSH端口>/dsh-pet/config`——极简 HTML 配置页（全部四项，回显当前值），
      保存即写 `~/.dsh/settings.yaml` 并即时广播给桌面壳（autostart → 写/删
      `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\whalebuddy`；skin → 桌面壳换肤）。
-   - 说明：whalebuddy 配置**不在 DSH 设置菜单里**——DSH 设置页的"插件" tab 只渲染有
-     client UI 包（React）的 namespace；本项目走轻量自带配置页方案（见 docs/10 §7）。
+   - **DSH 启动自启**：`launchOnDshStart` 打开后，DSH 每次启动（及开关打开时）进入 2 分钟
+     观察期（每 5s 检查）：宠物已连接即结束；**宠物进程存活但未连接则等它自行重连**
+     （重复拉起会因 WebView2 用户数据目录互锁立即退出）；进程不在则拉起一次。
+     宠物路径 = `petPath` 设置 → 注册表 Run 键两级发现。手动「立即启动」走
+     `POST /dsh-pet/api/launch`（绕过防抖，不绕过在线/存活检查）。
 
 > 卸载：从 `dsh.profile.bundles` 移除并删除包目录即可；设置项残留在 `~/.dsh/settings.yaml`（无害，可手动删 `whalebuddy:` 段）。
 
@@ -88,6 +96,8 @@ cp -r whalebuddy ~/.dsh/profiles/node_modules/whalebuddy
 | 字段 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
 | `autostart` | boolean | `false` | 开机自启动桌面宠物（桌面壳写/删 Windows Run 键） |
+| `launchOnDshStart` | boolean | `false` | DSH Desktop 启动时自动启动宠物（感知层 spawn 拉起；宠物已在线则跳过） |
+| `petPath` | string | `""` | 宠物 exe 完整路径；留空 = 按注册表 Run 键自动发现（拉起与「立即启动」用） |
 | `skin` | string | `dsh-black-whale` | 皮肤 id。桌面壳按 `data-skin` 属性换肤，新增皮肤见桌面壳文档 |
 
 schema（schemastery）：
@@ -95,22 +105,29 @@ schema（schemastery）：
 ```js
 z.object({
   autostart: z.boolean().default(false),
+  launchOnDshStart: z.boolean().default(false),
+  petPath: z.string().default(''),
   skin: z.string().default('dsh-black-whale'),
 })
 ```
 
 设置持久化在 `~/.dsh/settings.yaml`（DSH 的 settings-file provider，原子写入 + 热重载）。
+「插件配置」卡片的「已覆盖 / 恢复默认」按用户层字段存在性判定（与官方插件卡片同语义）。
 
-## 协议（桌面壳 ↔ 感知层）
+## 协议（桌面壳 / GUI 卡片 ↔ 感知层）
 
-- `GET /dsh-pet/handshake` → `{ ok, name, protocolVersion, hostVersion, wsPath, config }`
-- `GET /dsh-pet/config` → HTML 配置页（autostart checkbox + skin 输入，回显当前值）
+- `GET /dsh-pet/handshake` → `{ ok, name, protocolVersion, hostVersion(1.2), wsPath, config }`（config 含四字段）
+- `GET /dsh-pet/api/status` → `{ ok, config, pet: { connected, clients } }`（设置卡片运行状态行）
+- `POST /dsh-pet/api/launch` → `{ ok, launched, reason }`（reason: `pet-connected` / `exe-not-found` / …）
+- `GET /dsh-pet/config` → HTML 配置页（四个字段，回显当前值）
 - `POST /dsh-pet/config` → 表单提交 → `scope.update` → 303 回 GET（PRG）
 - `WS /dsh-pet/ws`：服务端推 `state`（含 `config`）、`config`（设置变更即时推）、`approval/asked`、`approval/settled`、`ping`；客户端发 `approval/respond`。
 
 ## 开发
 
 - 感知层源码：`lib/index.cjs`（纯 Node，零依赖；RFC6455 手写服务端）。
+- 设置卡片源码：`client/client.js`（手写 client bundle，loader lazy-CJS 格式；改动后同步部署并重启 DSH）。
+- 冒烟测试：仓库根 `node scripts/_smoke-card.cjs`（host 半边）与 `node scripts/_smoke-client.cjs`（client 半边）。
 - 桌面壳：见仓库根 README（`app/`，Tauri v2）。
 - 旧版 `host/dsh-pet-host.cjs` 是改造成本包前的 `$DSH_HOME/cordis.patch.yml` 直挂版，已由本包取代。
 

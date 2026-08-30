@@ -1,12 +1,18 @@
 {
   "name": "whalebuddy",
-  "version": "0.1.0",
-  "description": "whalebuddy — DeepSeek Harness 桌面宠物感知层插件：把 DSH 状态折叠成桌面宠物画面（舷窗），并在 DSH 设置里提供 autostart / skin 配置",
+  "version": "0.2.1",
+  "description": "whalebuddy — DeepSeek Harness 桌面宠物感知层插件：把 DSH 状态折叠成桌面宠物画面（舷窗），并在 DSH「设置 → 插件 → 插件配置」提供启动/运行状态配置（开机自启、DSH 启动自启、皮肤）",
   "license": "MIT",
   "type": "commonjs",
   "main": "lib/index.cjs",
+  "exports": {
+    ".": { "default": "./lib/index.cjs" },
+    "./client": { "default": "./client/client.js" },
+    "./package.json": "./package.json"
+  },
   "files": [
     "lib",
+    "client",
     "cordis.patch.yml",
     "dsh.plugin.json",
     "README.md",
@@ -28,6 +34,9 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
     }
   },
   "peerDependencies": {
