@@ -73,12 +73,17 @@ fn probe(port: u16) -> bool {
             Err(_) => break,
         }
     }
-    String::from_utf8_lossy(&buf).contains("dsh-pet")
+    // 严格匹配握手应答独有的 "whalebuddy"：不能只匹配 "dsh-pet"——
+    // 某些 dev server（如 Express）404 应答体里会回显请求路径 "/dsh-pet/handshake"，
+    // 扩大候选范围后这类端口会造成误报，宠物连错端口后陷入重连死循环。
+    String::from_utf8_lossy(&buf).contains("whalebuddy")
 }
 
-/// 枚举本机 TCP LISTENING 且落在临时端口段的端口（netstat 解析，零网络流量）。
+/// 枚举本机 TCP LISTENING 的回环端口（netstat 解析，零网络流量）。
 /// 动机：过滤驱动让关闭端口连接要 ~2s，全段 1.6 万端口扫描最坏 ~10 分钟；
 /// netstat 直接读内核 TCP 表，把候选缩到个位数，探测亚秒级完成。
+/// 注意：不做临时端口段（49152+）过滤 —— DSH Desktop 某些版本把 web 端口
+/// 固定在低位端口（如 3080），按段过滤会漏掉它，宠物就会卡在"找 dsh 中"。
 fn listening_candidates() -> Vec<u16> {
     let Ok(out) = Command::new("netstat").args(["-ano", "-p", "tcp"]).output() else {
         return Vec::new();
@@ -99,10 +104,14 @@ fn listening_candidates() -> Vec<u16> {
         let Ok(port) = port_s.parse::<u16>() else {
             continue;
         };
-        if (49152..=65535).contains(&port) && !ports.contains(&port) {
+        // 跳过 Windows 保留端口 0 与常见系统端口意义不大的可省略项不判断：
+        // probe() 有 300ms 连接 + 600ms 读写上限，候选总数很小，全部探测即可。
+        if port != 0 && !ports.contains(&port) {
             ports.push(port);
         }
     }
+    // 临时端口段的候选排前面：固定端口（如 3080）排后面，优先命中历史常见情况
+    ports.sort_by_key(|p| if *p >= 49152 { 0 } else { 1 });
     ports
 }
 
