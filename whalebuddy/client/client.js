@@ -7,10 +7,14 @@
  *
  * 契约面刻意收到最小：
  *   - 只 require('react')（平台模块，永远在场）
- *   - 注入 'slots' + 'settingsScope' 服务：
+ *   - 注入 'slots' + 'settingsScope' + 'sessions' 服务：
  *     · settingsScope.bind({ namespace: 'whalebuddy' }) = Host 侧 whalebuddy 设置
  *       命名空间的原生读写通道（保存走 settings.mutate，带 revision 围栏；
  *       覆盖/重置徽标按 user 层字段存在性判定——与官方插件卡片同语义）。
+ *     · sessions.list 快照店（client-runtime SessionRuntime）的 current 即 GUI
+ *       当前选中会话、byId[current].cwd 即聚焦工作区——watcher 订阅它并
+ *       POST /dsh-pet/api/focus 上报（变化即报 + 5s 心跳，docs/11 §5），
+ *       Host 侧 last-writer-wins 记录，15s 无新鲜上报回落"最近活跃"近似。
  *   - 注册一张卡片到 settings.plugin.item 插槽，key = 'whalebuddy'
  *     （设置页「插件配置」分页按 Host settings.describe 的 ns 与本 key 配对渲染）。
  *   - 运行状态（宠物在线与否）与「立即启动」走同源 fetch：
@@ -420,10 +424,55 @@ window.__ModuleLoader__.load({
 			);
 		}
 
+		// ───────────────────────── 真焦点上报（docs/11 §5） ─────────────────────────
+		// sessions.list 的 current = GUI 当前选中会话；byId[current].cwd = 聚焦工作区。
+		// 变化即报 + 5s 心跳（Host 15s 过期回落"最近活跃"近似）；失败静默——
+		// 上报断了只影响焦点精度，不影响任何其他功能。
+		function startFocusReporter(ctx) {
+			try {
+				var sessions = ctx.sessions;
+				var list = sessions && sessions.list;
+				if (!list || typeof list.subscribe !== "function" || typeof list.getSnapshot !== "function") return;
+				var lastKey = "";
+				var lastAt = 0;
+				var inflight = false;
+				function report(force) {
+					try {
+						var snap = list.getSnapshot();
+						var cur = snap.current;
+						if (!cur) return;
+						var cwd = snap.byId && snap.byId[cur] && typeof snap.byId[cur].cwd === "string" ? snap.byId[cur].cwd : "";
+						if (!cwd) return; // 冷会话摘要未带 cwd：等 list 增量补齐再报
+						var key = cur + "|" + cwd;
+						var now = Date.now();
+						if (!force && key === lastKey && now - lastAt < 5000) return;
+						if (key !== lastKey) { try { console.log("[whalebuddy] focus: " + cur + " @ " + cwd) } catch (_) {} }
+						lastKey = key;
+						lastAt = now;
+						if (inflight) return; // 上一发在途，下个心跳补上
+						inflight = true;
+						fetch("/dsh-pet/api/focus", {
+							method: "POST",
+							headers: { "content-type": "application/json" },
+							body: JSON.stringify({ sessionId: cur, cwd: cwd }),
+							cache: "no-store",
+						}).catch(function () {}).then(function () { inflight = false; });
+					} catch (e) { /* 上报尽力而为 */ }
+				}
+				list.subscribe(function () { report(false); });
+				report(false); // 页面加载即报一次（localStorage 恢复的选择）
+				setInterval(function () { report(true); }, 5000);
+				try { console.log("[whalebuddy] focus reporter active") } catch (_) {}
+			} catch (e) {
+				try { console.warn("[whalebuddy] focus reporter 不可用（不影响设置卡片）：", e) } catch (_) {}
+			}
+		}
+
 		// ───────────────────────── 插件装配 ─────────────────────────
 
-		exports.inject = ["slots", "settingsScope"];
+		exports.inject = ["slots", "settingsScope", "sessions"];
 		exports.apply = function (ctx) {
+			startFocusReporter(ctx);
 			try {
 				const scope = ctx.settingsScope.bind({ namespace: NS });
 				const form = createForm(scope);

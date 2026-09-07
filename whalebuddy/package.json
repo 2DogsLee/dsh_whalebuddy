@@ -1,7 +1,7 @@
 {
   "name": "whalebuddy",
-  "version": "0.2.1",
-  "description": "whalebuddy — DeepSeek Harness 桌面宠物感知层插件：把 DSH 状态折叠成桌面宠物画面（舷窗），并在 DSH「设置 → 插件 → 插件配置」提供启动/运行状态配置（开机自启、DSH 启动自启、皮肤）",
+  "version": "0.3.0",
+  "description": "whalebuddy — DeepSeek Harness 桌面宠物感知层插件：把 DSH 状态折叠成桌面宠物画面（舷窗），提供 GUI 真焦点（聚焦会话工作区）上报与 per-workspace 项目待办（todos.json + WS command 通道 + 宠物面板），并在 DSH「设置 → 插件 → 插件配置」提供启动/运行状态配置（开机自启、DSH 启动自启、皮肤）",
   "license": "MIT",
   "type": "commonjs",
   "main": "lib/index.cjs",

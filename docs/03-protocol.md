@@ -8,6 +8,9 @@
 |---|---|---|
 | 握手 | `GET /dsh-pet/handshake` | HTTP JSON：确认这是 DSH Pet 端点 + 协议版本协商 |
 | 数据 | `WS /dsh-pet/ws` | 双向消息信封；v1 只有 server→client 的 `state`/`ping` |
+| 焦点上报 | `POST /dsh-pet/api/focus` | GUI client 半边上报真选中会话（`{sessionId, cwd}`）；GET 调试回当前推导焦点 |
+| 待办数据 | `GET /dsh-pet/api/todos` | 当前焦点工作区清单 JSON（调试 / 兜底数据面） |
+| 待办兜底页 | `GET/POST /dsh-pet/todos` | 宠物离线时的轻量管理页（同 `/dsh-pet/config` 风格） |
 
 握手响应示例：
 
@@ -25,9 +28,29 @@
 ```
 DSH → 宠物:  state | ping | bye（服务端即将关闭）
              | approval/asked | approval/settled（v1.1 批准交互）
-宠物 → DSH:  pong | hello | command（预留）
+             | commandResult（v1.3 待办命令回执，只发请求方连接）
+宠物 → DSH:  pong | hello
              | approval/respond（v1.1 已实现：批准应答）
+             | command（v1.3 已实现：todo/* 与 focus/refresh）
 ```
+
+### v1.3 待办命令（command 通道落地，设计见 docs/11 §3.2）
+
+```
+宠物 → DSH  command:
+  { "type": "command", "id": "c-123", "action": "todo/add", "payload": { "content": "…" } }
+  actions: todo/add {content} | todo/toggle {id} | todo/remove {id}
+           | todo/edit {id, content} | todo/clear {doneOnly?}
+           | focus/refresh（请求回全量 state）
+
+DSH → 宠物  commandResult（只发请求方连接，不广播）:
+  { "type": "commandResult", "id": "c-123", "ok": true, "todos": [...] }
+  失败: { "type": "commandResult", "id": "c-123", "ok": false,
+          "error": "no-focus" | "unknown-action" | "…" }
+  focus/refresh: { "type": "commandResult", "id": "c-123", "ok": true, "state": <全量 state> }
+```
+
+- 变更在 ≤500ms 内经 flush 广播新 `state`（其余宠物客户端同步）；回执即时。
 
 ### v1.1 批准交互消息
 
@@ -62,8 +85,21 @@ DSH → 宠物  approval/settled（任何一方落定后的广播，含回退）
   "session": {
     "title": "桌面宠物调研",
     "status": "running",
-    "turn": 3
+    "turn": 3,
+    "cwd": "D:\\projects\\dsh-pet"
   },
+  "focus": {
+    "sessionId": "session-…",
+    "cwd": "D:\\projects\\dsh-pet",
+    "workspaceId": "ws-…",
+    "workspaceTitle": "dsh-pet",
+    "source": "gui",
+    "reportedAt": 1730000000000
+  },
+  "todos": [
+    { "id": "<uuid>", "content": "…", "status": "pending",
+      "createdAt": 1730000000000, "updatedAt": 1730000000000 }
+  ],
   "activity": "cmd",
   "activityIntensity": 2,
   "awaitingApproval": {
@@ -86,6 +122,9 @@ DSH → 宠物  approval/settled（任何一方落定后的广播，含回退）
 | `session.title` | string | `sessionTitle` 服务 | 当前主会话标题（v1 聚合单会话） |
 | `session.status` | `'idle' \| 'running'` | `agent/status` | 主状态机输入 |
 | `session.turn` | number | 事件 payload | 当前轮次，仅展示用 |
+| `session.cwd` | string? | 焦点推导（v1.3） | 聚焦工作区路径，无焦点为 null |
+| `focus` | object? | `/dsh-pet/api/focus` 上报 / 活动近似（v1.3） | `{sessionId, cwd, workspaceId, workspaceTitle, source, reportedAt}`；`source: 'gui'`（15s 内新鲜上报，last-writer-wins）或 `'activity'`（回落最近发事件会话，cwd 取 `agent.session.header.cwd`）；无焦点为 null |
+| `todos[]` | 数组 | TodosStore（v1.3） | 当前聚焦工作区待办 `{id, content, status, createdAt, updatedAt}`；`status: 'pending' \| 'done'`；持久化于 `$DSH_HOME/whalebuddy/todos.json` |
 | `activity` | 枚举 | `tools/*`、`llm/stream` | `idle` `thinking` `coding` `cmd` `search` `spawning`（映射表见 02 文档 §3） |
 | `activityIntensity` | 0–3 | `llm/stream` chunk 频率 | 冒泡密度等动画强度 |
 | `awaitingApproval.pending` | bool | `approval/request` 挂起期间 | 最高优先级信号 |
@@ -127,24 +166,33 @@ DSH 的 webServer 端口是动态的（当前会话 GUI 在 60498，不能写死
    命中 `name === "dsh-pet"` 即为正确端口；
 4. 全部失败 → offline，之后每 30s 重来一轮（因为 DSH 可能刚启动）。
 
-## 7. `command` 消息（v2 预留，v1 不实现）
+## 7. `command` 消息（v1.3 起实现 todo/* 子集）
 
-信封已双向，将来宠物点击交互走同一 WS：
+信封双向，宠物点击交互走同一 WS（首批落地待办命令，见 §2 v1.3 小节）：
 
 ```json
-{ "type": "command", "action": "approval/respond",
-  "payload": { "outcome": "allow" }, "id": "c-123" }
+{ "type": "command", "id": "c-123", "action": "todo/add",
+  "payload": { "content": "…" } }
 ```
 
-- `action` 命名空间化（`approval/respond`、`job/kill`、`session/interrupt`…）；
-- 每个命令带 `id`，插件回 `{ "type": "commandResult", "id": "c-123", "ok": true }`；
-- 安全边界：宠物是本机 UI 的等价物，但命令仍应在插件侧走 DSH 既有的
-  approval/权限链路，而不是绕过；具体设计在 M3 前另行评审。
+- `action` 命名空间化：已实现 `todo/add|toggle|remove|edit|clear`、`focus/refresh`；
+  后续候选（`job/kill`、`session/interrupt`…）落地前逐个评审；
+- 每个命令带 `id`，插件回 `{ "type": "commandResult", "id": "c-123", "ok": true, … }`
+  （只发请求方连接）；
+- 安全边界：宠物是本机 UI 的等价物，但命令仍应限制在插件自管数据
+  （todo 只写 `$DSH_HOME/whalebuddy/todos.json`），不越过 DSH 既有的
+  approval/权限链路。
 
 ## 8. 安全
 
 - webServer 只绑 127.0.0.1，宠物与 DSH 同机，无跨机暴露；
 - 握手路径是唯一入口，未注册路径 404；
-- v1 宠物→DSH 无任何可执行语义，纯只读展示，无注入面；
-- v2 引入 command 前必须过一次安全评审（本地恶意页面能否连这个 WS：
-  浏览器同源策略会阻止跨源 WS 读取，但需复核 DSH webServer 的 Origin 校验行为）。
+- **Origin 校验（v1.3 起）**：跨源 WS 连接不受浏览器同源策略限制，恶意网页可以
+  尝试连 `/dsh-pet/ws`（答批准/发命令）或 POST `/dsh-pet/api/*`。升级路由与
+  api/* / todos 路由只接受无 Origin（宠物壳原生 WS / curl 探测）或**回环 Origin**
+  （`127.0.0.1` / `localhost` / `*.localhost`——含宠物 WebView 的
+  `http://tauri.localhost`——及本机预览页 `127.0.0.1:8765`，端口不限）的请求，
+  其余 403 / 断开；
+- v1.3 起 宠物→DSH 的可执行语义仅限待办存储（上限 200 条/工作区、500 字/条），
+  不触任意路径；批准应答本就复用 ApprovalService 审计链路；
+- 后续扩展 command 动作集前仍需逐个评审（Origin 校验已落地，见上）。

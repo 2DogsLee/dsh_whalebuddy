@@ -628,6 +628,83 @@
   .debug-menu .dm-sep { height: 1px; background: rgba(255,255,255,0.08); margin: 4px 6px; }
   .debug-menu .dm-item.dm-action { color: #8ab4ff; }
   .debug-menu .dm-item.dm-action[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+  /* ============ 项目待办面板：双击鲸鱼 / 右键菜单「项目待办」弹出（docs/11 §6） ============ */
+  .todo-panel {
+    display: none;
+    width: 100%;
+    flex: 0 0 auto;
+    background: rgba(6, 14, 24, 0.92);
+    border: 1px solid rgba(120, 180, 255, 0.22);
+    border-radius: 10px;
+    padding: 8px;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .todo-panel.show { display: flex; }
+  .tp-head { display: flex; align-items: center; gap: 6px; }
+  .tp-title {
+    flex: 1; min-width: 0;
+    font-size: 12px; font-weight: 600; color: #d7e6f7;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .tp-badge {
+    flex: none; font-size: 10px; color: #8aa0b4;
+    border: 1px solid rgba(120, 180, 255, 0.25); border-radius: 8px;
+    padding: 0 6px; line-height: 15px;
+  }
+  .tp-close { flex: none; border: none; background: none; color: #7c8ba0; font-size: 11px; cursor: pointer; padding: 0 2px; }
+  .tp-close:hover { color: #ff6b6b; }
+  .tp-list {
+    flex: 1 1 auto; min-height: 0;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 2px;
+    max-height: 225px;
+  }
+  .tp-item { display: flex; align-items: flex-start; gap: 6px; padding: 3px 2px; border-radius: 6px; }
+  .tp-item:hover { background: rgba(120, 180, 255, 0.08); }
+  .tp-tick {
+    flex: none; width: 14px; height: 14px; margin-top: 2px;
+    border: 1px solid #4f9eff; border-radius: 4px;
+    background: transparent; cursor: pointer; padding: 0;
+    color: transparent; font-size: 10px; line-height: 12px; text-align: center;
+  }
+  .tp-item.done .tp-tick { background: #2b6cff; color: #fff; }
+  .tp-txt {
+    flex: 1; min-width: 0;
+    font-size: 12px; color: #cfd8e3; line-height: 1.45;
+    word-break: break-all; user-select: none;
+  }
+  .tp-item.done .tp-txt { color: #5b6b7d; text-decoration: line-through; }
+  .tp-rm {
+    flex: none; border: none; background: none; color: #7c8ba0;
+    font-size: 13px; cursor: pointer; padding: 0 2px; visibility: hidden;
+  }
+  .tp-item:hover .tp-rm { visibility: visible; }
+  .tp-rm:hover { color: #ff6b6b; }
+  .tp-empty { font-size: 11px; color: #5b6b7d; text-align: center; padding: 10px 0; line-height: 1.6; }
+  .tp-add { display: flex; gap: 6px; flex: none; }
+  .tp-add input {
+    flex: 1; min-width: 0;
+    background: rgba(10, 20, 34, 0.9);
+    border: 1px solid rgba(120, 180, 255, 0.25);
+    border-radius: 6px; color: #cfd8e3;
+    font: 12px -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    padding: 5px 8px; outline: none; user-select: text;
+  }
+  .tp-add input:focus { border-color: #4f9eff; }
+  .tp-add input:disabled { opacity: 0.45; }
+  .tp-add button {
+    flex: none; border: none; background: #2b6cff; color: #fff;
+    border-radius: 6px; width: 26px; cursor: pointer; font-size: 13px;
+  }
+  .tp-add button:disabled { opacity: 0.4; cursor: default; }
+  .tp-clear {
+    flex: none; border: none; background: none; color: #8aa0b4;
+    font-size: 10px; cursor: pointer; padding: 2px 0 0; text-align: left;
+  }
+  .tp-clear:hover { color: #ff9d4d; }
+  .tp-clear[disabled] { opacity: 0; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -739,10 +816,26 @@
       </div>
     </div>
 
+    <!-- 项目待办面板：双击鲸鱼 / 右键菜单「项目待办」弹出（docs/11 §6） -->
+    <div class="todo-panel" id="todo-panel">
+      <div class="tp-head">
+        <span class="tp-title" id="tp-title">未聚焦工作区</span>
+        <span class="tp-badge" id="tp-badge"></span>
+        <button class="tp-close" id="tp-close" title="收起">✕</button>
+      </div>
+      <div class="tp-list" id="tp-list"></div>
+      <form class="tp-add" id="tp-add">
+        <input type="text" id="tp-input" maxlength="500" placeholder="新待办…" autocomplete="off">
+        <button type="submit" id="tp-add-btn">＋</button>
+      </form>
+      <button class="tp-clear" id="tp-clear">清除已完成</button>
+    </div>
+
     <!-- 调试菜单：右键宠物弹出，切换状态/活动看动效 -->
     <div class="debug-menu" id="debug-menu">
       <div class="dm-title">调试 · 状态切换（右键再点此菜单外关闭）</div>
       <button class="dm-item dm-action" data-action="open-config"><span class="dot"></span>🐋 whalebuddy 设置…</button>
+      <button class="dm-item dm-action" data-action="toggle-todos"><span class="dot"></span>📋 项目待办</button>
       <div class="dm-sep"></div>
       <button class="dm-item dm-live" data-debug="live"><span class="dot"></span>真实模式</button>
       <button class="dm-item dm-off" data-debug="offline"><span class="dot"></span>offline 断连</button>
@@ -769,9 +862,11 @@
   const invoke = T.core.invoke
   const win = T.window.getCurrentWindow()
 
-  // 窗口高度：待批准时加高以在舷窗下方显示审批区；只 setSize（顶不动），不改位置
+  // 窗口高度：待批准 / 待办面板各自加高（叠加时取更高组合）；只 setSize（顶不动），不改位置
   const HEIGHT_BASE = 210
   const HEIGHT_APPROVE = 330
+  const HEIGHT_TODO = 470
+  const HEIGHT_APPROVE_TODO = 590
   function applyHeight(h) {
     win.setSize(new T.window.LogicalSize(178, h)).catch(() => {})
   }
@@ -907,7 +1002,9 @@
     if (card.classList.contains('approving') !== approving) {
       card.classList.toggle('approving', approving)
     }
-    applyHeight(approving ? HEIGHT_APPROVE : HEIGHT_BASE)
+    applyHeight(approving
+      ? (todoOpen ? HEIGHT_APPROVE_TODO : HEIGHT_APPROVE)
+      : (todoOpen ? HEIGHT_TODO : HEIGHT_BASE))
 
     // 标签：待批准优先；working 显示活动名 + 强度点；其余显示状态词
     const lbl = $('label')
@@ -956,9 +1053,24 @@
       if (msg.type === 'state') {
         state = msg
         applyConfig(msg.config) // state 快照内嵌 config（含皮肤/自启动）
+        if (Array.isArray(msg.todos)) serverTodos(msg.todos) // 权威清单（含 focus 字段驱动的当前工作区）
         render()
       } else if (msg.type === 'config') {
         applyConfig(msg.config) // 设置变更即时推送
+      } else if (msg.type === 'commandResult') {
+        // 宠物命令回执（docs/11 §3.2）：ok 带 todos 即权威清单；focus/refresh 带 state 全量
+        const p = pendingCmds.get(msg.id)
+        if (p) { clearTimeout(p.timer); pendingCmds.delete(msg.id) }
+        if (msg.ok && Array.isArray(msg.todos)) {
+          serverTodos(msg.todos)
+        } else if (msg.ok && msg.state) {
+          state = msg.state
+          applyConfig(msg.state.config)
+          serverTodos(Array.isArray(msg.state.todos) ? msg.state.todos : [])
+          render()
+        } else if (!msg.ok) {
+          revertLocal() // 失败回滚乐观更新
+        }
       } else if (msg.type === 'approval/asked') {
         // v1 单待批显示：并发多批时显示最新（服务端按 askId 各自结算/回退，不会卡死）
         pendingAsk = { askId: msg.askId, toolName: msg.toolName, reason: msg.reason }
@@ -1008,6 +1120,10 @@
             // 断开即弃待批：服务端检测到全断开会自动把请求交回 GUI 卡片，不会卡死
             pendingAsk = null
             askAnswered = false
+            // 待办命令全部按失败处理：清挂起定时器 + 回滚乐观更新（面板转离线态）
+            for (const p of pendingCmds.values()) { clearTimeout(p.timer) }
+            pendingCmds.clear()
+            revertLocal()
             resolve()
           }
           ws.onerror = () => { /* close 会跟着来 */ }
@@ -1020,6 +1136,124 @@
       }
     }
   }
+
+  // ---- 项目待办面板（docs/11 §6）：todosServer 权威 / todosView 乐观 ----
+  let todoOpen = false
+  let todosServer = [] // 最近一次服务端权威清单
+  let todosView = []   // 视图数据（乐观更新后）
+  let cmdSeq = 0
+  const pendingCmds = new Map() // 命令 id -> { timer }（4s 超时回滚）
+
+  function serverTodos(list) {
+    todosServer = Array.isArray(list) ? list : []
+    todosView = todosServer.map((t) => ({ ...t }))
+    renderTodos()
+  }
+  function revertLocal() {
+    todosView = todosServer.map((t) => ({ ...t }))
+    renderTodos()
+  }
+  function localEdit(fn) {
+    todosView = todosView.map((t) => ({ ...t }))
+    fn(todosView)
+    renderTodos()
+  }
+  function sendTodoCmd(action, payload, optimistic) {
+    if (typeof optimistic === 'function') { try { optimistic() } catch (e) {} }
+    if (!ws || ws.readyState !== 1) { revertLocal(); return }
+    const id = 'c-' + (++cmdSeq)
+    const entry = { timer: setTimeout(() => { pendingCmds.delete(id); revertLocal() }, 4000) }
+    pendingCmds.set(id, entry)
+    try {
+      ws.send(JSON.stringify({ type: 'command', id, action, payload }))
+    } catch (e) {
+      clearTimeout(entry.timer); pendingCmds.delete(id); revertLocal()
+    }
+  }
+  function renderTodos() {
+    const panel = $('todo-panel')
+    panel.classList.toggle('show', todoOpen)
+    if (!todoOpen) return
+    const f = state && state.focus
+    const ok = !!(online && f && f.cwd)
+    $('tp-title').textContent = f && f.cwd
+      ? (f.workspaceTitle || (String(f.cwd).split(/[\\/]+/).filter(Boolean).pop() || f.cwd))
+      : '未聚焦工作区'
+    $('tp-badge').textContent = !online ? '离线' : !ok ? '无焦点' : (f.source === 'gui' ? 'GUI' : '活跃')
+    const ul = $('tp-list')
+    ul.innerHTML = ''
+    if (!ok) {
+      const d = document.createElement('div')
+      d.className = 'tp-empty'
+      d.textContent = !online ? '离线：连上 DSH 后可管理待办' : '没有聚焦工作区——在 DSH 里选中一个会话'
+      ul.appendChild(d)
+    } else if (!todosView.length) {
+      const d = document.createElement('div')
+      d.className = 'tp-empty'
+      d.textContent = '（空）添加第一条待办吧'
+      ul.appendChild(d)
+    } else {
+      todosView.forEach((it) => {
+        const row = document.createElement('div')
+        row.className = 'tp-item' + (it.status === 'done' ? ' done' : '')
+        const tick = document.createElement('button')
+        tick.className = 'tp-tick'
+        tick.textContent = '✓'
+        tick.title = '切换状态'
+        tick.onclick = () => sendTodoCmd('todo/toggle', { id: it.id }, () => localEdit((list) => {
+          const t = list.find((x) => x.id === it.id)
+          if (t) t.status = t.status === 'done' ? 'pending' : 'done'
+        }))
+        const txt = document.createElement('span')
+        txt.className = 'tp-txt'
+        txt.textContent = it.content
+        const rm = document.createElement('button')
+        rm.className = 'tp-rm'
+        rm.textContent = '×'
+        rm.title = '删除'
+        rm.onclick = () => sendTodoCmd('todo/remove', { id: it.id }, () => localEdit((list) => {
+          const i = list.findIndex((x) => x.id === it.id)
+          if (i >= 0) list.splice(i, 1)
+        }))
+        row.appendChild(tick)
+        row.appendChild(txt)
+        row.appendChild(rm)
+        ul.appendChild(row)
+      })
+    }
+    $('tp-input').disabled = !ok
+    $('tp-add-btn').disabled = !ok
+    $('tp-clear').disabled = !ok || !todosView.some((t) => t.status === 'done')
+  }
+  function toggleTodos(force) {
+    todoOpen = force !== undefined ? !!force : !todoOpen
+    if (todoOpen && ws && ws.readyState === 1) {
+      // 打开即拉全量（手里 state 快照可能没带 todos/focus）：focus/refresh 回 state 全量
+      const id = 'c-' + (++cmdSeq)
+      const entry = { timer: setTimeout(() => { pendingCmds.delete(id) }, 4000) }
+      pendingCmds.set(id, entry)
+      try { ws.send(JSON.stringify({ type: 'command', id, action: 'focus/refresh', payload: {} })) } catch (e) { clearTimeout(entry.timer); pendingCmds.delete(id) }
+    }
+    renderTodos()
+    render()
+  }
+  $('tp-close').addEventListener('click', () => toggleTodos(false))
+  $('tp-add').addEventListener('submit', (ev) => {
+    ev.preventDefault()
+    if (!online || !(state && state.focus && state.focus.cwd)) return
+    const input = $('tp-input')
+    const c = input.value.trim().slice(0, 500)
+    if (!c) return
+    input.value = ''
+    sendTodoCmd('todo/add', { content: c }, () => localEdit((list) => {
+      list.push({ id: 'tmp-' + Date.now(), content: c, status: 'pending' })
+    }))
+  })
+  $('tp-clear').addEventListener('click', () => {
+    sendTodoCmd('todo/clear', { doneOnly: true }, () => localEdit((list) => {
+      for (let i = list.length - 1; i >= 0; i--) if (list[i].status === 'done') list.splice(i, 1)
+    }))
+  })
 
   // ---- 窗口行为 ----
   $('close').addEventListener('click', async () => {
@@ -1049,13 +1283,31 @@
   $('btn-allow').addEventListener('click', () => answerApproval('allowed-once'))
   $('btn-deny').addEventListener('click', () => answerApproval('rejected'))
 
-  // 拖拽：显式调用 startDragging（drag-region 属性会被子元素命中拦截，不可靠）
+  // 拖拽：显式调用 startDragging（drag-region 属性会被子元素命中拦截，不可靠）。
+  // 但不能在 mousedown 立即调——原生拖拽循环会捕获鼠标、吞掉后续事件，
+  // dblclick 永远不合成（待办面板开关依赖它）。改为按下后位移超 4px 才进入
+  // 拖拽；原地按下-松开是普通点击，click/dblclick 正常派发。
+  let dragArmed = null // 按下起点 {x,y}；超阈值转拖拽
   $('pet').addEventListener('mousedown', (ev) => {
     if (ev.button !== 0) return
     if (ev.target.closest('.close')) return
     if (ev.target.closest('.debug-menu')) return
-    win.startDragging().catch(() => {})
+    dragArmed = { x: ev.screenX, y: ev.screenY }
   })
+  window.addEventListener('mousemove', (ev) => {
+    if (!dragArmed) return
+    if (!(ev.buttons & 1)) { dragArmed = null; return }
+    const dx = ev.screenX - dragArmed.x
+    const dy = ev.screenY - dragArmed.y
+    if (dx * dx + dy * dy > 16) { // 位移 >4px = 拖拽意图
+      dragArmed = null
+      win.startDragging().catch(() => {})
+    }
+  })
+  window.addEventListener('mouseup', () => { dragArmed = null })
+
+  // 双击鲸鱼：切换项目待办面板（配合上面的延迟拖拽，dblclick 能正常合成）
+  $('pet').addEventListener('dblclick', () => toggleTodos())
 
   // ============ 调试模式：右键宠物弹出状态菜单 ============
   const dmMenu = $('debug-menu')
@@ -1111,6 +1363,11 @@
           .then(() => { try { invoke('debug_log', { msg: 'opened config: ' + url }) } catch (e) {} })
           .catch((e) => { try { invoke('debug_log', { msg: 'open_url failed: ' + String((e && e.message) || e) }) } catch (e2) {} })
       } catch (e) { /* invoke 不可用 */ }
+      closeDebugMenu()
+      return
+    }
+    if (btn.dataset.action === 'toggle-todos') {
+      toggleTodos()
       closeDebugMenu()
       return
     }

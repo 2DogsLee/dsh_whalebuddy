@@ -21,6 +21,18 @@
  *     宠物不在线 / 全部断开 / 超时（5min）则 next() 交回 api-proxy 的 GUI 卡片路径。
  *     两条路径互斥且都经 ApprovalService 的 asked/decided 审计事件落日志，
  *     不绕过任何权限语义。
+ *  4. 工作区聚焦与项目待办（v0.3，docs/11）：
+ *     - 焦点 = GUI client 半边 POST /dsh-pet/api/focus 上报的真选中会话
+ *       （client-runtime sessions.list 的 current + byId[current].cwd），
+ *       last-writer-wins；15s 无新鲜上报回落"最近发事件的会话"近似
+ *       （cwd 取 agent.session.header.cwd 叶子）。cwd 经 workspaceRegistry
+ *       （可选注入）反查项目名。
+ *     - 待办 = 自建 per-workspace 存储（$DSH_HOME/whalebuddy/todos.json，
+ *       按规范化 cwd 分键、原子写）；state 广播 focus + 当前工作区 todos；
+ *       宠物经 WS command 通道（todo/add|toggle|remove|edit|clear）增删改，
+ *       commandResult 回带最新清单；宠物离线时 /dsh-pet/todos 轻量页兜底。
+ *     - Origin 校验：WS 升级与 /dsh-pet/api/* 只收无 Origin（原生客户端）
+ *       或回环 Origin（同源 GUI / 本机预览页）的请求，拒绝恶意网页。
  *
  * 平面归属：跨会话（聚合所有会话、消费者是进程外的宠物），按 composition 规范
  * 属宿主平面 —— bundle 层在 profile 根组合里，天然宿主平面。
@@ -37,6 +49,8 @@
 const { randomUUID } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
 const fsSync = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 
 // schemastery（DSH 内置，有 CJS 出口）——settings schema 用；加载失败则降级（settings 不可用）
 let z = null
@@ -52,6 +66,158 @@ const DEFAULT_CONFIG = {
   petPath: '',
   skin: 'dsh-black-whale',
 }
+
+// ---------------- 模块级工具：Origin 校验 / TodosStore / basename ----------------
+
+// Origin 校验（docs/11 §3.4）：非浏览器客户端（宠物壳原生 WS / curl / PowerShell 探测）
+// 不带 Origin，一律放行；浏览器来源只收回环 origin——127.0.0.1 / localhost /
+// *.localhost（按 RFC 6761 都是回环域；Tauri WebView 页面 origin 是
+// http://tauri.localhost，宠物 UI 的 WS/fetch 从这里发出）/ [::1]，端口不限
+// （本机其他端口的预览页如 proto 8765 也放行）。拒绝一切非回环来源——防恶意网页
+// 跨源连 WS 答批准/发命令（跨源 WS 连接不受浏览器同源策略限制，服务端必须自查）。
+function originAllowed(req) {
+  try {
+    const origin = req && req.headers && req.headers.origin
+    if (origin === undefined || origin === '') return true
+    const host = String(new URL(origin).hostname || '').toLowerCase()
+    return host === '127.0.0.1' || host === 'localhost' || host === '::1' || host.endsWith('.localhost')
+  } catch (e) {
+    return false
+  }
+}
+
+function basenameOf(p) {
+  const parts = String(p || '').split(/[\\/]+/).filter(Boolean)
+  return parts.length ? parts[parts.length - 1] : ''
+}
+
+// TodosStore：per-workspace 待办，$DSH_HOME/whalebuddy/todos.json（docs/11 §4.2）。
+// - 惰性同步加载（首访问一次小文件读）；写路径走 promise 链串行 + tmp/rename 原子替换；
+// - 键 = 规范化 cwd（去尾分隔符；Windows 大小写不敏感的归一留给 workspaceRegistry 匹配层）；
+// - 上限：单工作区 200 条 / 单条 500 字符（超限报错，不静默截断内容）。
+function createTodosStore(log) {
+  const MAX_ITEMS = 200
+  const MAX_CONTENT = 500
+  const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
+  const dir = path.join(home, 'whalebuddy')
+  const file = path.join(dir, 'todos.json')
+  let data = null // { version: 1, workspaces: { [cwd]: { title, updatedAt, items[] } } }
+  let writeChain = Promise.resolve()
+
+  function ensureLoaded() {
+    if (data) return
+    try {
+      if (fsSync.existsSync(file)) {
+        const parsed = JSON.parse(fsSync.readFileSync(file, 'utf8'))
+        if (parsed && parsed.version === 1 && parsed.workspaces && typeof parsed.workspaces === 'object') {
+          data = parsed
+          return
+        }
+      }
+    } catch (e) {
+      log('todos.json 读取失败，备份后重建：' + ((e && e.message) || e))
+      try { fsSync.copyFileSync(file, file + '.bak') } catch (e2) { /* 无旧文件或不可读 */ }
+    }
+    data = { version: 1, workspaces: {} }
+  }
+  function keyOf(cwd) {
+    const k = path.normalize(String(cwd || '')).replace(/[\\/]+$/, '')
+    return k || String(cwd || '')
+  }
+  function wsOf(cwd, create) {
+    ensureLoaded()
+    const k = keyOf(cwd)
+    let w = data.workspaces[k]
+    if (!w && create) {
+      w = { title: '', updatedAt: 0, items: [] }
+      data.workspaces[k] = w
+    }
+    return w
+  }
+  function persist() {
+    writeChain = writeChain.then(() => {
+      try {
+        fsSync.mkdirSync(dir, { recursive: true })
+        const tmp = file + '.' + randomUUID().slice(0, 8) + '.tmp'
+        fsSync.writeFileSync(tmp, JSON.stringify(data), 'utf8')
+        fsSync.renameSync(tmp, file)
+      } catch (e) {
+        log('todos.json 写入失败：' + ((e && e.message) || e))
+      }
+    }, () => { /* 前一写失败不阻断后续 */ })
+    return writeChain
+  }
+  const cloneItems = (w) => (w ? w.items.map((it) => ({ ...it })) : [])
+  const normContent = (content) => {
+    const c = String(content == null ? '' : content).trim().slice(0, MAX_CONTENT)
+    if (!c) throw new Error('content 不能为空')
+    return c
+  }
+  const findItem = (w, id) => (w ? w.items.find((it) => it.id === id) : null)
+
+  return {
+    file,
+    listFor(cwd) { return cloneItems(wsOf(cwd, false)) },
+    titleOf(cwd) { const w = wsOf(cwd, false); return (w && w.title) || '' },
+    async setTitle(cwd, title) {
+      const w = wsOf(cwd, false)
+      const t = String(title || '').slice(0, 200)
+      if (!w || !t || w.title === t) return
+      w.title = t
+      await persist()
+    },
+    async add(cwd, content) {
+      const c = normContent(content)
+      const w = wsOf(cwd, true)
+      if (w.items.length >= MAX_ITEMS) throw new Error(`该工作区待办已达上限 ${MAX_ITEMS} 条`)
+      const now = Date.now()
+      w.items.push({ id: randomUUID(), content: c, status: 'pending', createdAt: now, updatedAt: now })
+      w.updatedAt = now
+      await persist()
+      return cloneItems(w)
+    },
+    async toggle(cwd, id) {
+      const w = wsOf(cwd, false)
+      const it = findItem(w, String(id || ''))
+      if (!it) return cloneItems(w)
+      it.status = it.status === 'done' ? 'pending' : 'done'
+      it.updatedAt = Date.now()
+      w.updatedAt = it.updatedAt
+      await persist()
+      return cloneItems(w)
+    },
+    async remove(cwd, id) {
+      const w = wsOf(cwd, false)
+      if (!w || !w.items.some((it) => it.id === id)) return cloneItems(w)
+      w.items = w.items.filter((it) => it.id !== id)
+      w.updatedAt = Date.now()
+      await persist()
+      return cloneItems(w)
+    },
+    async edit(cwd, id, content) {
+      const c = normContent(content)
+      const w = wsOf(cwd, false)
+      const it = findItem(w, String(id || ''))
+      if (!it) throw new Error('待办条目不存在')
+      it.content = c
+      it.updatedAt = Date.now()
+      w.updatedAt = it.updatedAt
+      await persist()
+      return cloneItems(w)
+    },
+    async clear(cwd, doneOnly) {
+      const w = wsOf(cwd, false)
+      if (!w) return cloneItems(w)
+      const before = w.items.length
+      w.items = doneOnly === false ? [] : w.items.filter((it) => it.status !== 'done')
+      if (w.items.length === before) return cloneItems(w)
+      w.updatedAt = Date.now()
+      await persist()
+      return cloneItems(w)
+    },
+  }
+}
+
 
 module.exports = {
   name: 'whalebuddy',
@@ -88,7 +254,8 @@ module.exports = {
             'access-control-allow-origin': '*',
           })
           res.end(JSON.stringify({
-            ok: true, name: 'whalebuddy', protocolVersion: 1, hostVersion: '1.2', wsPath: '/dsh-pet/ws',
+            ok: true, name: 'whalebuddy', protocolVersion: 1, hostVersion: '1.3', wsPath: '/dsh-pet/ws',
+            features: ['approval', 'focus', 'todos'],
             config: { autostart: cfg.autostart, launchOnDshStart: cfg.launchOnDshStart, petPath: cfg.petPath, skin: cfg.skin },
           }))
         },
@@ -186,13 +353,68 @@ module.exports = {
       tokens: { estimated: 0 },
       pulse: null, // { kind: 'panic' | 'celebrating', at }
       sessions: { running: 0, list: [] }, // 多会话聚合：running 计数 + 前 4 个运行中会话
+      focus: null,   // { sessionId, cwd, workspaceId, workspaceTitle, source, reportedAt } | null
+      todos: [],     // 当前聚焦工作区的待办（TodosStore 投影）
     }
     let thinkTicks = 0        // 自上次 flush 以来的 llm chunk 数
     let toolInFlight = 0      // 进行中的工具调用数
     let currentActivity = null // 工具触发的 activity（工具结束后保留至 flush 仲裁）
     let lastJson = ''
     let approvalCount = 0     // 进行中的批准请求数（多会话并发时不会互相误清）
-    const agents = new Map()  // agentId -> { id, title, status }，全局 status 由所有条目派生
+    const agents = new Map()  // agentId -> { id, title, status, cwd }，全局 status 由所有条目派生
+
+    // ---------------- 1.1 焦点与待办（docs/11 §4） ----------------
+    // 焦点两级来源：GUI client 半边的真焦点上报（last-writer-wins，多窗口取最后），
+    // 15s 无新鲜上报回落"最近发事件的会话"近似（cwd 取 agent.session.header.cwd 叶子）。
+    const FOCUS_STALE_MS = 15000
+    let focusReport = null // { sessionId, cwd, at } — /dsh-pet/api/focus 上报原文
+    const todosStore = createTodosStore((m) => console.error('[whalebuddy] ' + m))
+    // workspaceRegistry（可选注入，apiproxy 同名服务）的 cwd→{id,title} 反查，5s 缓存
+    let wsRegistryList = null // null = 服务缺席；否则 fn -> [{ id, path, title }]
+    let wsRegistryAt = 0
+    function registryLookup(cwd) {
+      if (!wsRegistryList) return null
+      const target = path.normalize(String(cwd || '')).replace(/[\\/]+$/, '').toLowerCase()
+      try {
+        const rows = wsRegistryList() || []
+        for (const w of rows) {
+          const p = path.normalize(String(w.path || '')).replace(/[\\/]+$/, '').toLowerCase()
+          if (p && p === target) return { id: String(w.id || ''), title: String(w.title || '') }
+        }
+      } catch (e) { /* 列表读取失败按无反查处理 */ }
+      return null
+    }
+    function computeFocus() {
+      const now = Date.now()
+      if (focusReport && now - focusReport.at < FOCUS_STALE_MS && focusReport.cwd) {
+        const meta = registryLookup(focusReport.cwd)
+        return {
+          sessionId: focusReport.sessionId,
+          cwd: focusReport.cwd,
+          workspaceId: meta ? meta.id : null,
+          workspaceTitle: meta && meta.title ? meta.title : (todosStore.titleOf(focusReport.cwd) || basenameOf(focusReport.cwd)),
+          source: 'gui',
+          reportedAt: focusReport.at,
+        }
+      }
+      const entry = agents.get(agg.session.id)
+      if (entry && entry.cwd) {
+        const meta = registryLookup(entry.cwd)
+        return {
+          sessionId: entry.id,
+          cwd: entry.cwd,
+          workspaceId: meta ? meta.id : null,
+          workspaceTitle: meta && meta.title ? meta.title : (todosStore.titleOf(entry.cwd) || basenameOf(entry.cwd)),
+          source: 'activity',
+          reportedAt: 0,
+        }
+      }
+      return null
+    }
+    function currentFocusCwd() {
+      const f = computeFocus()
+      return f ? f.cwd : null
+    }
 
     const TOOL_ACTIVITY = [
       [/^(pwsh|shell|bash|exec|terminal|run_command)/, 'cmd'],
@@ -219,7 +441,20 @@ module.exports = {
           title: agg.session.title,
           status: agg.session.status,
           turn: agg.session.turn,
+          cwd: agg.focus ? agg.focus.cwd : null,
         },
+        focus: agg.focus ? {
+          sessionId: agg.focus.sessionId,
+          cwd: agg.focus.cwd,
+          workspaceId: agg.focus.workspaceId,
+          workspaceTitle: agg.focus.workspaceTitle,
+          source: agg.focus.source,
+          reportedAt: agg.focus.reportedAt,
+        } : null,
+        todos: agg.todos.map((it) => ({
+          id: it.id, content: it.content, status: it.status,
+          createdAt: it.createdAt, updatedAt: it.updatedAt,
+        })),
         activity: agg.activity,
         activityIntensity: agg.activityIntensity,
         awaitingApproval: {
@@ -229,7 +464,7 @@ module.exports = {
         subagents: { running: agg.subagents },
         sessions: {
           running: agg.sessions.running,
-          list: agg.sessions.list.map((a) => ({ id: a.id, title: a.title, status: a.status })),
+          list: agg.sessions.list.map((a) => ({ id: a.id, title: a.title, cwd: a.cwd || null, status: a.status })),
         },
         jobs: agg.jobs.map((j) => ({ id: j.id, desc: j.desc, status: j.status })),
         workflow: { running: agg.workflow.running, phase: agg.workflow.phase },
@@ -247,6 +482,12 @@ module.exports = {
         else if (agg.session.status === 'running') agg.activity = 'thinking'
         else agg.activity = 'idle'
         if (agg.pulse && Date.now() - agg.pulse.at > 8000) agg.pulse = null
+        // 焦点与待办：每次 flush 重算（上报新鲜度 / 活动近似切换），title 冗余进存储
+        agg.focus = computeFocus()
+        agg.todos = agg.focus ? todosStore.listFor(agg.focus.cwd) : []
+        if (agg.focus && agg.focus.cwd && agg.focus.workspaceTitle) {
+          todosStore.setTitle(agg.focus.cwd, agg.focus.workspaceTitle).catch(() => { /* 尽力而为 */ })
+        }
         // 标题轮询：若某个会话的标题刚被异步填上，这里把它推到宠物
         const titleChanged = pollTitles()
         if (titleChanged) {
@@ -329,6 +570,23 @@ module.exports = {
         }, 'whalebuddy: settings scope')
       })
     } catch (e) { console.error('[whalebuddy] settings inject', e) }
+
+    // ---------------- 1.55 workspaceRegistry（可选注入，焦点反查项目名） ----------------
+    // apiproxy 同名服务的 list() 即 workspace.list 的数据源（id/path/title）。
+    // 服务缺席（无 dsh-workspace 组合）时静默降级：workspaceTitle 回落 basename。
+    try {
+      ctx.inject(['workspaceRegistry'], (wctx) => {
+        const reg = wctx.workspaceRegistry
+        if (reg && typeof reg.list === 'function') {
+          wsRegistryList = () => reg.list().map((w) => ({ id: w.id, path: w.path, title: w.title }))
+          wsRegistryAt = Date.now()
+          // 延迟一拍再标脏：注入回调若在 apply 同步段内被调起，markDirty→flush→broadcast
+          // 会踩到尚未初始化的 conns（TDZ）；queueMicrotask 保证 apply 先完成
+          queueMicrotask(() => { try { markDirty() } catch (e) { /* 应用层尽最大努力 */ } })
+        }
+        wctx.effect(() => () => { if (wsRegistryList) { wsRegistryList = null; wsRegistryAt = 0 } }, 'whalebuddy: workspaceRegistry')
+      })
+    } catch (e) { console.error('[whalebuddy] workspaceRegistry inject', e) }
 
     // ---------------- 1.6 宠物进程拉起（launchOnDshStart / 手动） ----------------
     // 发现顺序：petPath 设置（须存在）→ 注册表 Run 键（开机自启键里已有 exe 路径）。
@@ -591,8 +849,8 @@ module.exports = {
 
     function handleFrame(conn, f) {
       if (f.opcode === 0x1) {
-        // 应用层文本：宠物命令（v1 仅 approval/respond）
-        try { handleClientMessage(JSON.parse(dec.decode(f.payload))) } catch (e) { /* 坏帧忽略 */ }
+        // 应用层文本：宠物命令（approval/respond | command/todo/*）
+        try { handleClientMessage(conn, JSON.parse(dec.decode(f.payload))) } catch (e) { /* 坏帧忽略 */ }
         return
       }
       if (f.opcode === 0x2 || f.opcode === 0x0) return
@@ -632,7 +890,51 @@ module.exports = {
     const pendingAsks = new Map()
     const ASK_FALLBACK_MS = 300000 // 5 分钟无应答 → 交回 GUI
 
-    function handleClientMessage(msg) {
+    // 单连接回帧（commandResult 只发给请求方，不广播）
+    function replyConn(conn, obj) {
+      try { conn.socket.write(frameText(JSON.stringify(obj))) } catch (e) { /* 对方已断 */ }
+    }
+
+    // 宠物待办命令（docs/11 §3.2）：action 落在 TodosStore 后回带最新清单；
+    // focus/refresh 直接回全量快照。所有失败以 commandResult { ok:false, error } 回。
+    async function handleCommand(conn, msg) {
+      const id = typeof msg.id === 'string' ? msg.id : ''
+      const action = String(msg.action || '')
+      const p = (msg.payload && typeof msg.payload === 'object') ? msg.payload : {}
+      try {
+        if (action === 'focus/refresh') {
+          markDirty()
+          replyConn(conn, { type: 'commandResult', id, ok: true, state: snapshot() })
+          return
+        }
+        const cwd = currentFocusCwd()
+        if (!cwd) {
+          replyConn(conn, { type: 'commandResult', id, ok: false, error: 'no-focus' })
+          return
+        }
+        let todos = null
+        if (action === 'todo/add') {
+          todos = await todosStore.add(cwd, p.content)
+        } else if (action === 'todo/toggle') {
+          todos = await todosStore.toggle(cwd, String(p.id || ''))
+        } else if (action === 'todo/remove') {
+          todos = await todosStore.remove(cwd, String(p.id || ''))
+        } else if (action === 'todo/edit') {
+          todos = await todosStore.edit(cwd, String(p.id || ''), p.content)
+        } else if (action === 'todo/clear') {
+          todos = await todosStore.clear(cwd, p.doneOnly !== false)
+        } else {
+          replyConn(conn, { type: 'commandResult', id, ok: false, error: 'unknown-action' })
+          return
+        }
+        markDirty() // 触发 flush → state 广播（其余宠物客户端也同步新清单）
+        replyConn(conn, { type: 'commandResult', id, ok: true, todos })
+      } catch (e) {
+        replyConn(conn, { type: 'commandResult', id, ok: false, error: String((e && e.message) || e) })
+      }
+    }
+
+    function handleClientMessage(conn, msg) {
       if (!msg || typeof msg !== 'object') return
       if (msg.type === 'approval/respond' && typeof msg.askId === 'string') {
         const ask = pendingAsks.get(msg.askId)
@@ -641,6 +943,11 @@ module.exports = {
         console.log(`[whalebuddy] approval answered on pet: ${msg.askId} -> ${msg.outcome}`)
         broadcast({ type: 'approval/settled', askId: msg.askId, outcome: msg.outcome, by: 'pet' })
         ask.finish(Promise.resolve(msg.outcome))
+        return
+      }
+      if (msg.type === 'command' && typeof msg.action === 'string') {
+        handleCommand(conn, msg).catch(() => { /* handleCommand 内部已兜错 */ })
+        return
       }
       // 其余消息 v1 容忍不处理（pong/hello 预留）
     }
@@ -745,7 +1052,7 @@ module.exports = {
       let entry = agents.get(id)
       if (!entry) {
         entry = {
-          id, title: '', status: 'idle',
+          id, title: '', status: 'idle', cwd: '',
           agent: agent || null,             // 活引用：用于后续 sessionTitle.get(agent.session)
           titleStale: false,                // 标题需要重读
           titleNextPoll: 0,                 // 下次允许重读的时间戳
@@ -755,6 +1062,11 @@ module.exports = {
       } else if (agent && entry.agent !== agent) {
         entry.agent = agent // 刷新活引用（agent 偶尔被重建）
       }
+      // cwd 只读叶子：会话 header 的绝对路径（焦点回落源，docs/11 §1.1）
+      try {
+        const cwd = agent && agent.session && agent.session.header && agent.session.header.cwd
+        if (typeof cwd === 'string' && cwd) entry.cwd = cwd
+      } catch (e) { /* header 未稳定时跳过，下次事件再读 */ }
       return entry
     }
     function pruneAgents() {
@@ -810,7 +1122,7 @@ module.exports = {
       for (const a of agents.values()) {
         if (a.status === 'running') {
           running++
-          if (list.length < 4) list.push({ id: a.id, title: a.title || '', status: 'running' })
+          if (list.length < 4) list.push({ id: a.id, title: a.title || '', cwd: a.cwd || '', status: 'running' })
         }
       }
       agg.sessions = { running, list }
@@ -1015,6 +1327,9 @@ module.exports = {
       path: '/dsh-pet/ws',
       handler: (req, socket, head) => {
         try {
+          // Origin 校验（docs/11 §3.4）：原生客户端（宠物壳）无 Origin 放行；
+          // 浏览器只收回环 origin，拒绝恶意网页跨源连 WS（答批准/发命令）。
+          if (!originAllowed(req)) { socket.destroy(); return }
           const key = req && req.headers && req.headers['sec-websocket-key']
           if (typeof key !== 'string' || !key) { socket.destroy(); return }
           const accept = wsAcceptKey(key)
@@ -1062,7 +1377,8 @@ module.exports = {
           ok: true,
           name: 'whalebuddy',
           protocolVersion: 1,
-          hostVersion: '1.2',
+          hostVersion: '1.3',
+          features: ['approval', 'focus', 'todos'],
           config: { autostart: cfg.autostart, launchOnDshStart: cfg.launchOnDshStart, petPath: cfg.petPath, skin: cfg.skin },
           pet: { connected: conns.size > 0, clients: conns.size },
         }))
@@ -1082,10 +1398,130 @@ module.exports = {
           res.end(JSON.stringify(obj))
         }
         try {
+          if (!originAllowed(req)) { send(403, { ok: false, error: 'origin denied' }); return }
           const r = await launchPet('manual', { force: true })
           send(200, { ok: true, ...r })
         } catch (e) {
           send(500, { ok: false, error: String((e && e.message) || e) })
+        }
+      },
+    }))
+
+    // /dsh-pet/api/focus — GUI client 半边的真焦点上报（docs/11 §3.3）。
+    // GET 调试用：回当前推导焦点；POST { sessionId, cwd } last-writer-wins 记录，
+    // 字段截断校验后 markDirty（flush 里统一推导/广播，心跳重复上报靠 diff 抑制）。
+    keep(ctx.webServer.register({
+      kind: 'exact',
+      path: '/dsh-pet/api/focus',
+      handler: async (req, res) => {
+        const send = (code, obj) => {
+          res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+          res.end(JSON.stringify(obj))
+        }
+        try {
+          if (!originAllowed(req)) { send(403, { ok: false, error: 'origin denied' }); return }
+          if (req.method !== 'POST') {
+            const f = computeFocus()
+            send(200, { ok: true, focus: f, staleIn: focusReport ? Math.max(0, FOCUS_STALE_MS - (Date.now() - focusReport.at)) : 0 })
+            return
+          }
+          const chunks = []
+          for await (const c of req) chunks.push(c)
+          const body = Buffer.concat(chunks).toString('utf8')
+          let parsed = {}
+          try { parsed = JSON.parse(body) } catch (e) { send(400, { ok: false, error: 'bad json' }); return }
+          const sessionId = typeof parsed.sessionId === 'string' ? parsed.sessionId.slice(0, 200) : ''
+          const cwd = typeof parsed.cwd === 'string' ? parsed.cwd.slice(0, 1024) : ''
+          if (!sessionId || !cwd) { send(400, { ok: false, error: 'sessionId and cwd required' }); return }
+          const changed = !focusReport || focusReport.sessionId !== sessionId || focusReport.cwd !== cwd
+          focusReport = { sessionId, cwd, at: Date.now() }
+          if (changed) console.log(`[whalebuddy] focus (gui): session=${sessionId} cwd=${cwd}`)
+          markDirty()
+          send(200, { ok: true, changed })
+        } catch (e) {
+          send(500, { ok: false, error: String((e && e.message) || e) })
+        }
+      },
+    }))
+
+    // /dsh-pet/api/todos — 当前焦点清单 JSON（调试 / 兜底数据面）。
+    keep(ctx.webServer.register({
+      kind: 'exact',
+      path: '/dsh-pet/api/todos',
+      handler: (req, res) => {
+        if (!originAllowed(req)) {
+          res.writeHead(403, { 'content-type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'origin denied' }))
+          return
+        }
+        const f = computeFocus()
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+        res.end(JSON.stringify({ ok: true, focus: f, todos: f ? todosStore.listFor(f.cwd) : [] }))
+      },
+    }))
+
+    // /dsh-pet/todos — 宠物离线时的轻量兜底页（同 /dsh-pet/config 风格）。
+    // GET 渲染当前焦点工作区的清单 + 表单；POST 表单动作后 303 回本页（PRG）。
+    keep(ctx.webServer.register({
+      kind: 'exact',
+      path: '/dsh-pet/todos',
+      handler: async (req, res) => {
+        const f = () => computeFocus()
+        if (req.method !== 'POST') {
+          const cur = f()
+          const items = cur ? todosStore.listFor(cur.cwd) : []
+          const esc = escapeHtml
+          const rows = items.map((it) =>
+            `<li class="item"><form method="post" action="/dsh-pet/todos">` +
+            `<input type="hidden" name="action" value="toggle"><input type="hidden" name="id" value="${esc(it.id)}">` +
+            `<button class="tick${it.status === 'done' ? ' done' : ''}" title="切换状态">${it.status === 'done' ? '☑' : '☐'}</button></form>` +
+            `<span class="txt${it.status === 'done' ? ' done' : ''}">${esc(it.content)}</span>` +
+            `<form method="post" action="/dsh-pet/todos" class="rm"><input type="hidden" name="action" value="remove">` +
+            `<input type="hidden" name="id" value="${esc(it.id)}"><button title="删除">×</button></form></li>`).join('')
+          const html = `<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>whalebuddy 项目待办</title>` +
+            `<style>body{font-family:-apple-system,'Segoe UI',sans-serif;background:#0e1726;color:#cfd8e3;max-width:480px;margin:48px auto;padding:0 20px}` +
+            `h1{font-size:18px;margin:0 0 4px}.sub{font-size:12px;color:#8aa0b4;margin:0 0 20px}` +
+            `ul{list-style:none;margin:0 0 16px;padding:0}li.item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #1a2436}` +
+            `.txt{flex:1;font-size:14px;word-break:break-all}.txt.done{color:#5b6b7d;text-decoration:line-through}` +
+            `button{font:inherit;background:none;border:0;color:#8aa0b4;cursor:pointer}.tick{font-size:16px}.rm button{font-size:16px}.rm button:hover{color:#ff6b6b}` +
+            `form.rm{margin:0}.add{display:flex;gap:8px}input[type=text]{flex:1;padding:8px 10px;background:#1a2436;color:#cfd8e3;border:1px solid #2a3a52;border-radius:6px;font:inherit}` +
+            `.go{background:#2b6cff;color:#fff;border:0;border-radius:6px;padding:8px 16px;font:inherit;cursor:pointer}` +
+            `.clear{margin:12px 0 0;font-size:12px}</style></head><body>` +
+            `<h1>📋 ${cur ? esc(cur.workspaceTitle || basenameOf(cur.cwd)) : '未聚焦工作区'}</h1>` +
+            `<p class="sub">${cur ? esc(cur.cwd) + ' · 来源：' + (cur.source === 'gui' ? 'GUI 聚焦' : '最近活跃') : '没有聚焦会话时无法确定工作区（打开 DSH 选中一个会话即可）'}</p>` +
+            (cur ? `<ul>${rows || '<li class="item"><span class="txt" style="color:#5b6b7d">（空，添加第一条待办）</span></li>'}</ul>` +
+              `<form class="add" method="post" action="/dsh-pet/todos"><input type="hidden" name="action" value="add">` +
+              `<input type="text" name="content" maxlength="500" placeholder="新待办…" required><button class="go">添加</button></form>` +
+              (items.some((it) => it.status === 'done') ? `<form class="clear" method="post" action="/dsh-pet/todos"><input type="hidden" name="action" value="clear"><button>清除已完成</button></form>` : '')
+              : '') +
+            `</body></html>`
+          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+          res.end(html)
+          return
+        }
+        // POST：Origin 校验 + 表单动作 → TodosStore → 303 回 GET
+        if (!originAllowed(req)) {
+          res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+          res.end('forbidden')
+          return
+        }
+        try {
+          const chunks = []
+          for await (const c of req) chunks.push(c)
+          const params = new URLSearchParams(Buffer.concat(chunks).toString('utf8'))
+          const action = params.get('action') || ''
+          const cwd = currentFocusCwd()
+          if (!cwd) throw new Error('没有聚焦工作区')
+          if (action === 'add') await todosStore.add(cwd, params.get('content') || '')
+          else if (action === 'toggle') await todosStore.toggle(cwd, params.get('id') || '')
+          else if (action === 'remove') await todosStore.remove(cwd, params.get('id') || '')
+          else if (action === 'clear') await todosStore.clear(cwd, true)
+          markDirty()
+          res.writeHead(303, { location: '/dsh-pet/todos', 'cache-control': 'no-store' })
+          res.end()
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
+          res.end('操作失败：' + escapeHtml(String((e && e.message) || e)))
         }
       },
     }))
@@ -1107,6 +1543,6 @@ module.exports = {
       conns.clear()
     }, 'whalebuddy: teardown')
 
-    console.log('[whalebuddy v0.2.1] perception active: /dsh-pet/handshake + /dsh-pet/ws + /dsh-pet/api/* (approval answerer armed, prepend; dsh-start launcher watching)')
+    console.log('[whalebuddy v0.3.0] perception active: /dsh-pet/handshake + /dsh-pet/ws + /dsh-pet/api/* + /dsh-pet/todos (approval answerer armed; focus tracker + workspace todos ready)')
   },
 }

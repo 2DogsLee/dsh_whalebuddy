@@ -3,7 +3,9 @@
 <img width="178" height="210" alt="image" src="https://github.com/user-attachments/assets/eb2b2a36-a84e-413c-bbca-37c4f7d9ff5d" /> <img width="178" height="210" alt="image" src="https://github.com/user-attachments/assets/d46ac100-abd3-43b9-816d-0638b807905a" /> <img width="178" height="210" alt="image" src="https://github.com/user-attachments/assets/fd5850ad-bef0-4419-9f73-8964b6414359" /> <img width="178" height="210" alt="image" src="https://github.com/user-attachments/assets/d38281be-fdea-4c55-b07c-27b6a368d002" />
 
 透明置顶的桌面宠物，实时感知 DeepSeek Harness（DSH）中 agent 会话的运行状态：
-任务在跑时它干活，空闲时它睡觉，等待批准时它敲门提醒你——并可在配置页设置**开机自启动**与**皮肤**。
+任务在跑时它干活，空闲时它睡觉，等待批准时它敲门提醒你；**双击鲸鱼**可管理
+当前聚焦工作区（项目）的待办清单（跟随 GUI 真焦点，见 [docs/11](docs/11-workspace-focus-todos.md)）；
+并可在配置页设置**开机自启动**与**皮肤**。
 
 ## 平台支持
 
@@ -147,7 +149,8 @@ Invoke-WebRequest "http://127.0.0.1:$port/dsh-pet/handshake" -UseBasicParsing | 
 ```powershell
 # 1. 感知层插件：已作为 bundle 安装到本机 DSH（$DSH_HOME/profiles/web 的
 #    dsh.profile.bundles 含 "whalebuddy"，包在 $DSH_HOME/profiles/node_modules/whalebuddy）。
-#    DSH 重启后自动加载；改动插件源码后：同步到 $DSH_HOME/profiles/node_modules/whalebuddy 并重启 DSH。
+#    DSH 重启后自动加载；改动插件源码后：同步 lib/index.cjs + client/client.js +
+#    package.json 到 $DSH_HOME/profiles/node_modules/whalebuddy 对应位置并重启 DSH。
 
 # 2. 桌面宠物：
 cd D:\projects\dsh-pet\app\src-tauri
@@ -206,6 +209,7 @@ cargo run            # 开发运行（首次编译 5-15 分钟）
 | [docs/08-porthole-design.md](docs/08-porthole-design.md) | 舷窗×鲸鱼主题设计：四层渲染架构、状态→深海场景映射、主题包机制 |
 | [docs/09-state-visual-spec.md](docs/09-state-visual-spec.md) | 状态与画面规格追踪：场景色/道具/鲸鱼姿态/动画参数 + 调试模式 |
 | [docs/10-whalebuddy-plugin.md](docs/10-whalebuddy-plugin.md) | whalebuddy 插件化：bundle 机制、settings 集成、安装/卸载到任意 DSH |
+| [docs/11-workspace-focus-todos.md](docs/11-workspace-focus-todos.md) | 工作区聚焦与项目待办设计：GUI 真焦点上报链路、per-workspace 待办存储、宠物待办面板 |
 
 ## 相关路径
 
