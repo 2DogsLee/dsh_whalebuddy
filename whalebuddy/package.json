@@ -6,8 +6,12 @@
   "type": "commonjs",
   "main": "lib/index.cjs",
   "exports": {
-    ".": { "default": "./lib/index.cjs" },
-    "./client": { "default": "./client/client.js" },
+    ".": {
+      "default": "./lib/index.cjs"
+    },
+    "./client": {
+      "default": "./client/client.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -36,7 +40,10 @@
       "patch": "./cordis.patch.yml"
     },
     "client": {
-      "platform": "web"
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
     }
   },
   "peerDependencies": {

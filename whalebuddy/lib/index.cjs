@@ -219,10 +219,24 @@ function createTodosStore(log) {
 }
 
 
+// 新版 DSH（2026-09-29 Desktop 更新起）：设置命名空间 = 插件 Config schema
+// （settings 服务读 entry.fiber.runtime.Config 生成表单并在 describe 镜像里
+// 服务 "whalebuddy"）。旧 settings.register(ns, schema) API 已移除。
+// Config 变更时 cordis 会重启本插件 fiber（re-apply），apply(ctx, config) 以新值重入。
+module.exports.Config = z === null ? undefined : z.object({
+  // .volatile()：settings 服务只把 volatile 字段投影进设置表单（volatileForm），
+  // 不带标记的字段会被整体丢弃 → describe 不服务本命名空间 → GUI 卡片消失。
+  autostart: z.boolean().default(DEFAULT_CONFIG.autostart).volatile(),
+  launchOnDshStart: z.boolean().default(DEFAULT_CONFIG.launchOnDshStart).volatile(),
+  petPath: z.string().default(DEFAULT_CONFIG.petPath).volatile(),
+  skin: z.string().default(DEFAULT_CONFIG.skin).volatile(),
+})
+
 module.exports = {
   name: 'whalebuddy',
   inject: ['webServer', 'timer'],
-  apply(ctx) {
+  Config: module.exports.Config,
+  apply(ctx, config) {
     const enc = new TextEncoder()
     const dec = new TextDecoder()
     // HTML escape（/dsh-pet/config 渲染表单时用，防 skin 等用户可写字段注入）
@@ -232,14 +246,20 @@ module.exports = {
 
     // whalebuddy 配置（settings 合并结果；启动时为默认值，settings 服务注入后刷新）。
     // 定义在 leader 探测之前，因为 handshake handler 会引用它。
+    // 新版 DSH：设置值 = 本插件 Config（apply 以新 config 重入即感知变更），不再走 settings.register/watch。
+    const incoming = (config && typeof config === 'object') ? config : {}
     const cfg = {
-      autostart: DEFAULT_CONFIG.autostart,
-      launchOnDshStart: DEFAULT_CONFIG.launchOnDshStart,
-      petPath: DEFAULT_CONFIG.petPath,
-      skin: DEFAULT_CONFIG.skin,
+      autostart: incoming.autostart === true,
+      launchOnDshStart: incoming.launchOnDshStart === true,
+      petPath: typeof incoming.petPath === 'string' ? incoming.petPath.slice(0, 512) : '',
+      skin: typeof incoming.skin === 'string' && incoming.skin ? incoming.skin : DEFAULT_CONFIG.skin,
     }
     // settings scope 引用（settings 段填，config 路由 POST 写回用）
     let writeConfig = async () => { throw new Error('settings service not available') }
+    // 诊断：宿主 settings describe 实际服务的命名空间（经 handshake 暴露）
+    let servedNamespaces = null
+    // 诊断：客户端半侧最近一次 POST /dsh-pet/api/focus 的时间（>0 = 客户端 apply 活着）
+    let lastFocusPostAt = 0
 
     // ---------------- 0. 领导权探测（必须最先做） ----------------
     let leader = true
@@ -257,6 +277,27 @@ module.exports = {
             ok: true, name: 'whalebuddy', protocolVersion: 1, hostVersion: '1.3', wsPath: '/dsh-pet/ws',
             features: ['approval', 'focus', 'todos'],
             config: { autostart: cfg.autostart, launchOnDshStart: cfg.launchOnDshStart, petPath: cfg.petPath, skin: cfg.skin },
+            served: servedNamespaces ? servedNamespaces() : null,
+            lastFocusPostAt,
+            lastFocusPostAgeMs: lastFocusPostAt ? Date.now() - lastFocusPostAt : null,
+            diag: (() => {
+              try {
+                const entry = ctx[Symbol.for('cordis.entry')]
+                const loader = entry && entry.loader
+                const all = loader ? [...loader.entries()] : []
+                const counts = new Map()
+                for (const e of all) counts.set(e.options.id, (counts.get(e.options.id) ?? 0) + 1)
+                const treeId = (e) => (e.parent && e.parent.tree && e.parent.tree.ctx && e.parent.tree.ctx.fiber && e.parent.tree.ctx.fiber.entry) ? e.parent.tree.ctx.fiber.entry.id : null
+                return {
+                  selfId: entry && entry.options.id,
+                  selfParentTreeId: entry ? treeId(entry) : 'no-entry',
+                  total: all.length,
+                  whaleCount: counts.get('whalebuddy') ?? 0,
+                  rows: all.map((e) => ({ id: e.options.id, n: counts.get(e.options.id), tree: treeId(e) }))
+                    .filter((r) => r.id === 'whalebuddy' || r.n > 1 || r.tree !== 'include'),
+                }
+              } catch (e) { return { diagError: String(e && e.message) } }
+            })(),
           }))
         },
       }))
@@ -511,63 +552,21 @@ module.exports = {
     } catch (e) { console.error('[whalebuddy] throttle', e) }
     const markDirty = () => { try { throttledFlush() } catch (e) { console.error('[whalebuddy] markDirty', e) } }
 
-    // ---------------- 1.5 whalebuddy 设置（settings 服务可选） ----------------
-    // 注册 "whalebuddy" namespace → DSH「设置 → 插件 → 插件配置」菜单的客户端卡片
-    // （client/client.js）与自带 /dsh-pet/config 配置页均可读写；
-    // 用户改动经 scope.watch 感知 → 即时广播 {type:'config'} 给桌面壳。
-    // settings 服务不存在（无 dsh-settings-file 的组合）时静默降级，不影响感知。
+    // ---------------- 1.5 whalebuddy 设置（新版 settings 契约） ----------------
+    // 2026-09-29 Desktop 更新：settings.register / scope.watch 已移除。设置命名空间
+    // "whalebuddy" 由本插件导出的 Config schema 提供（见文件头部 Config 导出），
+    // 值随 apply(ctx, config) 重入刷新；这里只保留 /dsh-pet/config POST 的写回
+    // 通道（官方 settings.update 按 ns 落 profile，随后 Config 重启本 fiber）。
+    // settings 服务缺席时静默降级，不影响感知。
     try {
       ctx.inject(['settings'], (sctx) => {
-        if (z === null) {
-          console.error('[whalebuddy] schemastery 不可用，settings 注册跳过（仅状态感知）')
-          return
+        writeConfig = async (patch) => {
+          await sctx.settings.update(WHALEBUDDY_NS, patch)
+          return true
         }
-        let scope
-        try {
-          scope = sctx.settings.register(WHALEBUDDY_NS, z.object({
-            autostart: z.boolean().default(DEFAULT_CONFIG.autostart),
-            launchOnDshStart: z.boolean().default(DEFAULT_CONFIG.launchOnDshStart),
-            petPath: z.string().default(DEFAULT_CONFIG.petPath),
-            skin: z.string().default(DEFAULT_CONFIG.skin),
-          }), { base: { ...DEFAULT_CONFIG } })
-          // 让 /dsh-pet/config POST 能写回 settings（PRG 模式 → scope.update → watch → broadcast）
-          writeConfig = async (patch) => scope.update(patch)
-        } catch (e) {
-          console.error('[whalebuddy] settings.register', e)
-          return
+        servedNamespaces = () => {
+          try { return sctx.settings.describe().map((d) => d.ns) } catch (e) { return ['describe-error: ' + e.message] }
         }
-        const applyConfig = () => {
-          let v = {}
-          try { v = scope.get() || {} } catch (e) { /* 读不到就用默认 */ }
-          const next = {
-            autostart: v.autostart === true,
-            launchOnDshStart: v.launchOnDshStart === true,
-            petPath: typeof v.petPath === 'string' ? v.petPath.slice(0, 512) : '',
-            skin: typeof v.skin === 'string' && v.skin ? v.skin : DEFAULT_CONFIG.skin,
-          }
-          const changed = next.autostart !== cfg.autostart
-            || next.launchOnDshStart !== cfg.launchOnDshStart
-            || next.petPath !== cfg.petPath
-            || next.skin !== cfg.skin
-          cfg.autostart = next.autostart
-          cfg.launchOnDshStart = next.launchOnDshStart
-          cfg.petPath = next.petPath
-          cfg.skin = next.skin
-          if (changed) {
-            try {
-              broadcast({ type: 'config', protocolVersion: 1, ts: Date.now(), config: { ...cfg } })
-              markDirty()
-            } catch (e) { console.error('[whalebuddy] config broadcast', e) }
-          }
-          // launchOnDshStart 打开（或 DSH 启动首次读到 true）→ 启动观察器：
-          // 已连接即结束；进程存活等它重连；进程不在则拉起（见 1.6）
-          maybeLaunchPet(next.launchOnDshStart ? 'settings' : 'startup-check')
-        }
-        applyConfig()
-        const stopWatch = scope.watch(applyConfig)
-        sctx.effect(() => () => {
-          try { stopWatch() } catch (e) { /* 清理尽力而为 */ }
-        }, 'whalebuddy: settings scope')
       })
     } catch (e) { console.error('[whalebuddy] settings inject', e) }
 
@@ -711,6 +710,14 @@ module.exports = {
       watchTimer = setInterval(() => { tick().catch(() => { /* 已在内部记日志 */ }) }, 5000)
       if (typeof watchTimer.unref === 'function') watchTimer.unref()
     }
+
+    // 启动时刻（替代旧 applyConfig()）：apply 总是以最新 Config 重入，
+    // fiber 启动或设置变更时把 config 快照广播给宠物一次，并做 launchOnDshStart 检查
+    try {
+      broadcast({ type: 'config', protocolVersion: 1, ts: Date.now(), config: { ...cfg } })
+      markDirty()
+    } catch (e) { console.error('[whalebuddy] initial config broadcast', e) }
+    if (leader && cfg.launchOnDshStart) maybeLaunchPet('startup-check')
 
     // ---------------- 2. 极简 RFC6455 服务端 ----------------
     function sha1Words(bytes) {
@@ -1420,9 +1427,10 @@ module.exports = {
         }
         try {
           if (!originAllowed(req)) { send(403, { ok: false, error: 'origin denied' }); return }
+          if (req.method === 'POST') { lastFocusPostAt = Date.now() } // 诊断：任何 POST 都说明客户端 apply 活着
           if (req.method !== 'POST') {
             const f = computeFocus()
-            send(200, { ok: true, focus: f, staleIn: focusReport ? Math.max(0, FOCUS_STALE_MS - (Date.now() - focusReport.at)) : 0 })
+            send(200, { ok: true, focus: f, staleIn: focusReport ? Math.max(0, FOCUS_STALE_MS - (Date.now() - focusReport.at)) : 0, lastFocusPostAt })
             return
           }
           const chunks = []

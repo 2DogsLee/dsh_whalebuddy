@@ -144,22 +144,17 @@ window.__ModuleLoader__.load({
 				let landed = true;
 				for (const [field, s] of [...staged]) {
 					try {
+						// 新版 ConfigFormController.set/unset 直接返回 Host 是否接受（boolean）
 						if (s.kind === "bool") {
-							await scope.set(field, s.value);
-							const u = snap().user;
-							if (!(u && Object.prototype.hasOwnProperty.call(u, field) && u[field] === s.value)) landed = false;
+							if (!await scope.set(field, s.value)) landed = false;
 						} else if (s.kind === "clear") {
-							await scope.unset(field);
-							if (stored(field)) landed = false;
+							if (!await scope.unset(field)) landed = false;
 						} else {
 							const trimmed = s.text.trim();
 							if (trimmed === "") {
-								await scope.unset(field);
-								if (stored(field)) landed = false;
-							} else {
-								await scope.set(field, trimmed);
-								const u = snap().user;
-								if (!(u && Object.prototype.hasOwnProperty.call(u, field) && u[field] === trimmed)) landed = false;
+								if (!await scope.unset(field)) landed = false;
+							} else if (!await scope.set(field, trimmed)) {
+								landed = false;
 							}
 						}
 					} catch (e) { landed = false; }
@@ -470,21 +465,35 @@ window.__ModuleLoader__.load({
 
 		// ───────────────────────── 插件装配 ─────────────────────────
 
-		exports.inject = ["slots", "settingsScope", "sessions"];
+		// 2026-09-29 Desktop 更新的完整契约（与官方伴生包一致）：
+		//   1. 设置读写通道 = ctx.configForms.get(namespace)：快照 { status:"ready",
+		//      value/base/user/revision/writable }，写入走 set/unset（返回是否被接受）。
+		//      旧 settingsScope 服务已整体移除（bind 直接抛 TypeError，之前整个 try
+		//      块被跳过 → 卡片从未注册，这就是设置入口消失的根因）。
+		//   2. 卡片落点 ×2，均经 configForms.whileServed 注册（宿主服务 "whalebuddy"
+		//      命名空间时挂载、停服时自动撤下）：
+		//      · settings.plugins.tab —— 设置 →「内置插件」分页（新版设置菜单里
+		//        唯一的插件页，plugins.item 所在的插件管理面板不在设置侧导航）；
+		//      · plugins.item —— 插件管理面板的卡片（如可达则同样出现）。
+		//   3. configForms 不在则降级：配置页 /dsh-pet/config 与感知层不受影响。
+		exports.inject = ["slots", "sessions", "configForms"];
 		exports.apply = function (ctx) {
 			startFocusReporter(ctx);
 			try {
-				const scope = ctx.settingsScope.bind({ namespace: NS });
+				const scope = ctx.configForms.get(NS);
 				const form = createForm(scope);
 				const ConnectedCard = () => h(WhalebuddyCard, { form, scope });
-				ctx.slots.inject("settings.plugin.item", function () {
-					return ctx.slots.register({
-						name: "settings.plugin.item",
-						key: NS,
-					}, ConnectedCard);
-				});
+				const options = { id: "whalebuddy", order: 50, label: "🐋 桌面宠物 whalebuddy" };
+				ctx.effect(() => ctx.configForms.whileServed([NS], () => {
+					ctx.slots.inject("settings.plugins.tab", () => ctx.slots.register({
+						name: "settings.plugins.tab", ...options,
+					}, ConnectedCard));
+					ctx.slots.inject("plugins.item", () => ctx.slots.register({
+						name: "plugins.item", ...options,
+					}, ConnectedCard));
+				}), "whalebuddy: settings card");
 			} catch (e) {
-				// 设置分区缺席或插槽契约变化：静默降级，/dsh-pet/config 配置页与感知层不受影响。
+				// configForms 缺席或契约变化：静默降级，/dsh-pet/config 配置页与感知层不受影响。
 				try { console.warn("[whalebuddy] 设置卡片注册失败（配置页不受影响）：", e) } catch (_) {}
 			}
 		};
