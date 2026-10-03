@@ -305,6 +305,42 @@ pub fn run() {
     }
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![discover_port, debug_log, set_autostart, open_url])
+        .setup(|app| {
+            // 初始定位：主屏工作区右下角（物理像素）。
+            // 动机：tauri.conf.json 写死 x/y 在多显示器 + 非 100% DPI 下换算不可靠，
+            // 实测窗口曾落到 (-32000) 经典离屏位置（屏幕上看不到宠物）。
+            // Monitor.size()/position() 是物理像素，outer_size() 也是物理像素，直接相减无换算误差。
+            use tauri::Manager;
+            let Some(win) = app.get_webview_window("pet") else {
+                return Ok(());
+            };
+            let mon = match win.primary_monitor() {
+                Ok(Some(m)) => Some(m),
+                Ok(None) => win.current_monitor().ok().flatten(),
+                Err(_) => None,
+            };
+            if let Some(mon) = mon {
+                let scale = mon.scale_factor();
+                // 16 逻辑像素边距，按 DPI 换算成物理像素
+                let margin = (16.0 * scale) as i32;
+                let win_size = win.outer_size().unwrap_or_default();
+                let mp = mon.position();
+                let ms = mon.size();
+                let x = mp.x + ms.width as i32 - win_size.width as i32 - margin;
+                let y = mp.y + ms.height as i32 - win_size.height as i32 - margin;
+                if let Err(e) = win.set_position(tauri::PhysicalPosition::new(x.max(0), y.max(0))) {
+                    log_discover(&format!("set_position failed: {e}"));
+                } else {
+                    log_discover(&format!(
+                        "positioned at primary work-area bottom-right: {x},{y} (scale {scale}, mon {}x{}@{},{} win {}x{})",
+                        ms.width, ms.height, mp.x, mp.y, win_size.width, win_size.height
+                    ));
+                }
+            } else {
+                log_discover("no monitor info; keep tauri default position");
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("dsh-pet 启动失败");
 }

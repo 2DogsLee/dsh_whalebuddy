@@ -14,8 +14,6 @@
         "title": "dsh-pet",
         "width": 178,
         "height": 210,
-        "x": 1100,
-        "y": 560,
         "transparent": true,
         "decorations": false,
         "alwaysOnTop": true,
