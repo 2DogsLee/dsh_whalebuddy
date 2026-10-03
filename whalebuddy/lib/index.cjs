@@ -247,13 +247,31 @@ module.exports = {
     // whalebuddy 配置（settings 合并结果；启动时为默认值，settings 服务注入后刷新）。
     // 定义在 leader 探测之前，因为 handshake handler 会引用它。
     // 新版 DSH：设置值 = 本插件 Config（apply 以新 config 重入即感知变更），不再走 settings.register/watch。
+    // 2026-10 修复：Config 字段全部声明了 .volatile()，cordis/schemastery 解析后传给 apply 的是
+    // Volatile 引用（须 .get() 读快照），不是裸值——旧代码用 `=== true` / `typeof === 'string'`
+    // 判断裸值，引用对象永远不匹配，cfg 恒为默认值（表现为 petPath/autostart 全部失灵）。
+    // volatile-only 变更时 Loader 就地提交引用并发 loader/volatile-update，此处监听后重读即可。
     const incoming = (config && typeof config === 'object') ? config : {}
+    // Volatile 引用 → 快照值；裸值原样返回（兼容旧版 DSH / 测试直传普通对象）
+    const readV = (v) => (v && typeof v === 'object' && typeof v.get === 'function') ? v.get() : v
     const cfg = {
-      autostart: incoming.autostart === true,
-      launchOnDshStart: incoming.launchOnDshStart === true,
-      petPath: typeof incoming.petPath === 'string' ? incoming.petPath.slice(0, 512) : '',
-      skin: typeof incoming.skin === 'string' && incoming.skin ? incoming.skin : DEFAULT_CONFIG.skin,
+      autostart: false,
+      launchOnDshStart: false,
+      petPath: '',
+      skin: DEFAULT_CONFIG.skin,
     }
+    function refreshCfg() {
+      cfg.autostart = readV(incoming.autostart) === true
+      cfg.launchOnDshStart = readV(incoming.launchOnDshStart) === true
+      const p = readV(incoming.petPath)
+      cfg.petPath = typeof p === 'string' ? p.slice(0, 512) : ''
+      const s = readV(incoming.skin)
+      cfg.skin = (typeof s === 'string' && s) ? s : DEFAULT_CONFIG.skin
+    }
+    refreshCfg()
+    try {
+      keep(ctx.on('loader/volatile-update', () => { try { refreshCfg() } catch {} }))
+    } catch (e) { /* 旧宿主无此事件则忽略 */ }
     // settings scope 引用（settings 段填，config 路由 POST 写回用）
     let writeConfig = async () => { throw new Error('settings service not available') }
     // 诊断：宿主 settings describe 实际服务的命名空间（经 handshake 暴露）
