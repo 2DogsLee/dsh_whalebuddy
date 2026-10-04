@@ -24,8 +24,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/2DogsLee/dsh_whalebuddy.git",
-    "directory": "whalebuddy"
+    "url": "git+https://github.com/2DogsLee/dsh_whalebuddy.git"
   },
   "keywords": [
     "dsh",

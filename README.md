@@ -15,7 +15,7 @@
 
 | 组件 | Windows 10/11 | macOS | Linux |
 |---|---|---|---|
-| 感知层插件 `whalebuddy/` | ✅ 完整支持 | 🟡 理论可用（纯 Node 零平台依赖，未实测） | 🟡 理论可用（同左） |
+| 感知层插件（仓库根 `lib/`+`client/`+`package.json`） | ✅ 完整支持 | 🟡 理论可用（纯 Node 零平台依赖，未实测） | 🟡 理论可用（同左） |
 | 桌面壳 `app/`（宠物窗口） | ✅ 完整支持 | ❌ 未适配 | ❌ 未适配 |
 
 **桌面壳目前仅支持 Windows**，平台相关的三处实现：
@@ -42,9 +42,9 @@
 
 | 路径 | 内容 |
 |---|---|
-| [`whalebuddy/`](whalebuddy/README.md) | **DSH 插件包**（感知层）：npm 包 + `dsh.bundle` 声明，可安装到任意 DSH；注册 `whalebuddy` 设置 namespace（autostart/skin） |
+| `package.json` + `lib/` + `client/` + `dsh.plugin.json` + `cordis.patch.yml` | **DSH 插件包**（感知层，仓库根即 npm 包）：npm 包 + `dsh.bundle` 声明，可安装到任意 DSH；注册 `whalebuddy` 设置 namespace（autostart/skin） |
 | `app/` | 桌面壳：Tauri v2 透明置顶窗口（`app/src-tauri` Rust 端，`app/ui/index.html` 单文件前端） |
-| `host/dsh-pet-host.cjs` | 旧版感知层（`$DSH_HOME/cordis.patch.yml` 直挂方式），已被 `whalebuddy/` 包取代 |
+| `host/dsh-pet-host.cjs` | 旧版感知层（`$DSH_HOME/cordis.patch.yml` 直挂方式），已被根目录 whalebuddy 包取代 |
 | `docs/` | 设计文档：架构 / 协议 / 主题 / 状态规格 |
 | `logo/`、`scripts/` | 鲸鱼素材处理与调试脚本 |
 
@@ -71,7 +71,7 @@ $DSH     = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFIL
 $PROFILE = Join-Path $DSH 'profiles\web'            # DSH Desktop 默认 profile；其他 profile 替换名字
 
 # 1a. 复制插件包到 profile 的平铺 node_modules（bundle 解析会找到它）
-Copy-Item -Recurse -Force "$REPO\whalebuddy" "$DSH\profiles\node_modules\whalebuddy"
+Copy-Item -Recurse -Force "$REPO" "$DSH\profiles\node_modules\whalebuddy" -Exclude app,docs,logo,scripts,host,proto,tools,.git
 
 # 1b. 在 profile 的 package.json 里登记 bundle（dsh.profile.bundles 数组追加 "whalebuddy"）
 $manifestPath = Join-Path $PROFILE 'package.json'
@@ -176,7 +176,7 @@ dsh plugin --profile web add github:2DogsLee/dsh_whalebuddy
 
 ## 安装到其他 DSH（开源分享）
 
-见 [`whalebuddy/README.md`](whalebuddy/README.md)：包放进 profile 可解析的 node_modules，
+见下「安装」一节与 `dsh.plugin.json`：包放进 profile 可解析的 node_modules，
 在 profile package.json 的 `dsh.profile.bundles` 追加 `"whalebuddy"`，重启 DSH 即可。
 （官方 CLI 等价操作：`dsh plugin --profile <name> add whalebuddy`）
 
@@ -191,7 +191,7 @@ dsh plugin --profile web add github:2DogsLee/dsh_whalebuddy
 
 **配置入口**：
 - DSH GUI「设置 → 插件 → 插件配置」→「🐋 桌面宠物 whalebuddy」卡片（v0.2 起，
-  `whalebuddy/client/client.js` 注册进 `settings.plugin.item` 插槽，与 Host 侧
+  `client/client.js` 注册进 `settings.plugin.item` 插槽，与 Host 侧
   `whalebuddy` 设置命名空间同名配对；保存走官方 settingsScope 通道）
 - 桌面壳**右键菜单 →「🐋 whalebuddy 设置…」**（默认浏览器打开）
 - 或直接访问 `http://127.0.0.1:<DSH端口>/dsh-pet/config`
